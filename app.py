@@ -6,7 +6,7 @@ app = Flask(__name__)
 MANIFEST = {
     'id': 'com.skyflix',
     'version': '1.0.0',
-    'name': 'SKY FLIX',
+    'name': 'SKYFLIX',
     'description': 'SKYFLIX offers streaming of movies and series',
     'logo': 'https://i.imgur.com/qVgkbYn.png',
     'resources': ['stream'],
