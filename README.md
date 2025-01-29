@@ -1,2 +1,2 @@
-# skyflix
-skyflix is ​​an addon for stremio
+# netcine
+netcine is ​​an addon for stremio
