@@ -22,13 +22,13 @@ MANIFEST = {
         "catalogs": [
             {
                 "type": "movie",
-                "id": "netcine",
+                "id": "skyflix",
                 "name": "IMDB",
                 "extraSupported": ["search"]
             },
             {
                 "type": "series",
-                "id": "netcine",
+                "id": "skyflix",
                 "name": "IMDB",
                 "extraSupported": ["search"]
             }
@@ -60,7 +60,7 @@ def catalog_route(type, id):
     return add_cors_headers(response)
 
 # Rota para pesquisa
-@app.route('/catalog/<type>/netcine/search=<query>.json')
+@app.route('/catalog/<type>/skyflix/search=<query>.json')
 def search(type, query):
     catalog = catalog_search(query)
     if catalog:
