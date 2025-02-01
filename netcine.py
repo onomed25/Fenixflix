@@ -150,6 +150,8 @@ def opcoes_filmes(url,headers, host):
 
 
 def scrape_search(host,headers,text,year_imdb):
+    # fix search
+    text = text.replace('&amp;', '&')
     url = requests.get(host,headers=headers).url
     url_parsed = urlparse(url)
     new_host = url_parsed.scheme + '://' + url_parsed.hostname + '/'
@@ -160,7 +162,7 @@ def scrape_search(host,headers,text,year_imdb):
         else:
             search_ = text
     except:
-        search_ = text    
+        search_ = text 
     url_search = new_host + '?s=' + quote_plus(search_)
     headers.update({'Cookie': 'XCRF%3DXCRF'})
     r = requests.get(url_search,headers=headers)
@@ -211,7 +213,7 @@ def scrape_search(host,headers,text,year_imdb):
             img = i.find('div', {'class': 'imagen'})
             link = img.find('a').get('href', '')
             return link, new_host
-    return ''   
+    return '', ''   
 
 
 def search_link(id):
@@ -259,5 +261,6 @@ def search_link(id):
                     stream, headers_  = resolve_stream(page)
     except:
         pass
-    return stream, headers_   
+    return stream, headers_ 
+
 
