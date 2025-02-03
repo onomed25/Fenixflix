@@ -137,18 +137,38 @@ def catalog_route(type, id):
     else:
         server = f'https://{host}/logo?url='      
     if type == 'tv':
-        r = requests.get('https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-        if r.status_code == 200:
-            text = r.text
-            text = text.replace('oneplay:', 'skyflix:')
-            text = text.replace('https', server+'https')
-            text = text.encode()
-            data = json.loads(text)
-            response = jsonify(data)
-        else:
-            response = jsonify({
-                "metas": []
-            })
+        try:
+            r = requests.get('https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+            if r.status_code == 200:
+                text = r.text
+                text = text.replace('oneplay:', 'skyflix:')
+                text = text.replace('https', server+'https')
+                text = text.encode()
+                data = json.loads(text)
+                response = jsonify(data)
+            else:
+                response = jsonify({
+                    "metas": []
+                })
+        except:
+            try:
+                r = requests.get('https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+                if r.status_code == 200:
+                    text = r.text
+                    text = text.replace('oneplay:', 'skyflix:')
+                    text = text.replace('https', server+'https')
+                    text = text.encode()
+                    data = json.loads(text)
+                    response = jsonify(data)
+                else:
+                    response = jsonify({
+                        "metas": []
+                    })
+            except:
+                response = jsonify({
+                    "metas": []
+                })                              
+
 
     else:
         response = jsonify({
@@ -178,13 +198,28 @@ def meta(type,id):
         server = f'https://{host}/logo?url='      
     if type == 'tv':
         id_channels = id.split(':')[1]
-        r = requests.get(f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-        text = r.text
-        text = text.replace('oneplay:', 'skyflix:')
-        text = text.replace('https', server+'https')
-        text = text.encode()
-        data = json.loads(text)
-        response = jsonify(data)
+        try:
+            r = requests.get(f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+            text = r.text
+            text = text.replace('oneplay:', 'skyflix:')
+            text = text.replace('https', server+'https')
+            text = text.encode()
+            data = json.loads(text)
+            response = jsonify(data)
+        except:
+            try:
+                r = requests.get(f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+                text = r.text
+                text = text.replace('oneplay:', 'skyflix:')
+                text = text.replace('https', server+'https')
+                text = text.encode()
+                data = json.loads(text)
+                response = jsonify(data)
+            except:
+                response = jsonify({
+                "meta": {}
+                })                
+
     else:
         response = jsonify({
         "meta": {}
