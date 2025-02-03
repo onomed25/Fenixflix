@@ -110,7 +110,7 @@ def genres(id):
     else:
         server = f'https://{host}/logo?url='
     try:
-        r = requests.get(f'https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay/genre={id}.json').text
+        r = requests.get(f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay/genre={id}.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}).text
         r = r.replace('oneplay:', 'skyflix:')
         r = r.replace('https', server+'https')
         data = json.loads(r)
