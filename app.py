@@ -130,11 +130,21 @@ def catalog_route(type, id):
     else:
         server = f'https://{host}/logo?url='      
     if type == 'tv':
-        r = requests.get('https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json').text
-        r = r.replace('oneplay:', 'skyflix:')
-        r = r.replace('https', server+'https')
-        data = json.loads(r)
-        response = jsonify(data)
+        r = requests.get('https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json')
+        if r.status_code == 200:
+            text = r.text
+            text = text.replace('oneplay:', 'skyflix:')
+            text = text.replace('https', server+'https')
+            data = json.loads(r)
+            try:
+                response = jsonify(data)
+            except:
+                response = jsonify({
+                "metas": []
+                })
+        else:
+            print('erro ao acessar a url codigo: ', str(r.status_code))
+
     else:
         response = jsonify({
         "metas": []
