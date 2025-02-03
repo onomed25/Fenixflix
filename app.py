@@ -137,9 +137,11 @@ def catalog_route(type, id):
             text = text.replace('https', server+'https')
             text = text.encode()
             data = json.loads(text)
+            print(data)
             try:
                 response = jsonify(data)
-            except:
+            except Exception as e:
+                print(e)
                 response = jsonify({
                 "metas": []
                 })
