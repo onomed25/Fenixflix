@@ -135,7 +135,7 @@ def catalog_route(type, id):
         server = f'https://{host}/logo?url='      
     if type == 'tv':
         logging.debug('tem tv')
-        r = requests.get('https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+        r = requests.get('https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
         logging.debug(str(r.status_code))
         if r.status_code == 200:
             text = r.text
