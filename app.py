@@ -2,9 +2,6 @@ from flask import Flask, jsonify, request, make_response, render_template, Respo
 from netcine import catalog_search, search_link
 import json
 import requests
-import logging
-
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
 
@@ -127,16 +124,13 @@ def genres(id):
 # Rota para o catálogo
 @app.route('/catalog/<type>/<id>.json')
 def catalog_route(type, id):
-    logging.debug('abriu o catalogo')
     host = request.host
     if 'localhost' in host or '127.0.0.1' in host:
         server = f'http://{host}/logo?url='
     else:
         server = f'https://{host}/logo?url='      
     if type == 'tv':
-        logging.debug('tem tv')
         r = requests.get('https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-        logging.debug(str(r.status_code))
         if r.status_code == 200:
             text = r.text
             text = text.replace('oneplay:', 'skyflix:')
@@ -145,7 +139,6 @@ def catalog_route(type, id):
             data = json.loads(text)
             response = jsonify(data)
         else:
-            print('erro ao acessar a url codigo: ', str(r.status_code))
             response = jsonify({
                 "metas": []
             })
@@ -178,7 +171,7 @@ def meta(type,id):
         server = f'https://{host}/logo?url='      
     if type == 'tv':
         id_channels = id.split(':')[1]
-        r = requests.get(f'https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json').text
+        r = requests.get(f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
         text = r.text
         text = text.replace('oneplay:', 'skyflix:')
         text = text.replace('https', server+'https')
