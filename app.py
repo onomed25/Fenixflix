@@ -197,8 +197,14 @@ def meta(type,id):
 def stream(type, id):
     if type == 'tv':
         id_channels = id.split(':')[1]
-        url = f'https://oneplayhd.com/stremio_oneplay/stream/tv/oneplay:{id_channels}.json'
-        r = requests.get(url).json()
+        url = f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/stream/tv/oneplay:{id_channels}.json'
+        try:
+            r = requests.get(url,headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}).json()
+        except:
+            try:
+                r = requests.get(url,headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}).json()
+            except:
+                r = {'streams': []}
         scrape_ = r.get('streams', []) 
     elif type == 'movie' or type == 'series':
         try:
