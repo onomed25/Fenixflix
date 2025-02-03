@@ -2,6 +2,9 @@ from flask import Flask, jsonify, request, make_response, render_template, Respo
 from netcine import catalog_search, search_link
 import json
 import requests
+import logging
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
 
@@ -124,16 +127,16 @@ def genres(id):
 # Rota para o catálogo
 @app.route('/catalog/<type>/<id>.json')
 def catalog_route(type, id):
-    print('abriu catalogo')
+    logging.debug('abriu o catalogo')
     host = request.host
     if 'localhost' in host or '127.0.0.1' in host:
         server = f'http://{host}/logo?url='
     else:
         server = f'https://{host}/logo?url='      
     if type == 'tv':
-        print('tem tv')
+        logging.debug('tem tv')
         r = requests.get('https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json')
-        print(r.status_code)
+        logging.debug(str(r.status_code))
         if r.status_code == 200:
             text = r.text
             text = text.replace('oneplay:', 'skyflix:')
