@@ -116,9 +116,16 @@ def genres(id):
         data = json.loads(r)
         response = jsonify(data) 
     except:
-        response = jsonify({
-        "metas": []
-        })
+        try:
+            r = requests.get(f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay/genre={id}.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}).text
+            r = r.replace('oneplay:', 'skyflix:')
+            r = r.replace('https', server+'https')
+            data = json.loads(r)
+            response = jsonify(data) 
+        except:        
+            response = jsonify({
+            "metas": []
+            })
     return add_cors_headers(response)
 
 # Rota para o catálogo
