@@ -135,7 +135,8 @@ def catalog_route(type, id):
             text = r.text
             text = text.replace('oneplay:', 'skyflix:')
             text = text.replace('https', server+'https')
-            data = json.loads(r)
+            text = text.encode()
+            data = json.loads(text)
             try:
                 response = jsonify(data)
             except:
@@ -177,9 +178,11 @@ def meta(type,id):
     if type == 'tv':
         id_channels = id.split(':')[1]
         r = requests.get(f'https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json').text
-        r = r.replace('oneplay:', 'skyflix:')
-        r = r.replace('https', server+'https')
-        data = json.loads(r)
+        text = r.text
+        text = text.replace('oneplay:', 'skyflix:')
+        text = text.replace('https', server+'https')
+        text = text.encode()
+        data = json.loads(text)
         response = jsonify(data)
     else:
         response = jsonify({
