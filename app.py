@@ -144,6 +144,9 @@ def catalog_route(type, id):
                 })
         else:
             print('erro ao acessar a url codigo: ', str(r.status_code))
+            response = jsonify({
+                "metas": []
+            })
 
     else:
         response = jsonify({
