@@ -124,12 +124,14 @@ def genres(id):
 # Rota para o catálogo
 @app.route('/catalog/<type>/<id>.json')
 def catalog_route(type, id):
+    print('abriu catalogo')
     host = request.host
     if 'localhost' in host or '127.0.0.1' in host:
         server = f'http://{host}/logo?url='
     else:
         server = f'https://{host}/logo?url='      
     if type == 'tv':
+        print('tem tv')
         r = requests.get('https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json')
         print(r.status_code)
         if r.status_code == 200:
