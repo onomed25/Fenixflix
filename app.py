@@ -111,8 +111,9 @@ def genres(id):
         server = f'http://{host}/logo?url='
     else:
         server = f'https://{host}/logo?url='
+    url = f'https://api.codetabs.com/v1/proxy/?quest=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay/genre={id}.json'
     try:
-        res = requests.get(f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay/genre={id}.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
         code = r.status_code
         logging.debug('CODIGO: %s'%str(code))
         r = res.text
@@ -122,7 +123,7 @@ def genres(id):
         response = jsonify(data) 
     except:
         try:
-            res = requests.get(f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay/genre={id}.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
             code = r.status_code
             logging.debug('CODIGO: %s'%str(code))
             r = res.text            
@@ -145,7 +146,7 @@ def catalog_route(type, id):
     else:
         server = f'https://{host}/logo?url='      
     if type == 'tv':
-        url = 'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json'
+        url = 'https://api.codetabs.com/v1/proxy/?quest=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json'
         try:
             r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
             code = r.status_code
@@ -211,7 +212,7 @@ def meta(type,id):
         server = f'https://{host}/logo?url='      
     if type == 'tv':
         id_channels = id.split(':')[1]
-        url = f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json'
+        url = f'https://api.codetabs.com/v1/proxy/?quest=https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json'
         logging.debug('URL: %s'%str(url))  
         try:
             r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
@@ -251,7 +252,7 @@ def meta(type,id):
 def stream(type, id):
     if type == 'tv':
         id_channels = id.split(':')[1]
-        url = f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/stream/tv/oneplay:{id_channels}.json'
+        url = f'https://api.codetabs.com/v1/proxy/?quest=https://oneplayhd.com/stremio_oneplay/stream/tv/oneplay:{id_channels}.json'
         logging.debug('URL: %s'%str(url)) 
         try:
             res = requests.get(url,headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
