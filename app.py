@@ -114,7 +114,7 @@ def genres(id):
     url = f'https://api.codetabs.com/v1/proxy/?quest=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay/genre={id}.json'
     try:
         res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-        code = r.status_code
+        code = res.status_code
         logging.debug('CODIGO: %s'%str(code))
         r = res.text
         r = r.replace('oneplay:', 'skyflix:')
@@ -124,7 +124,7 @@ def genres(id):
     except:
         try:
             res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-            code = r.status_code
+            code = res.status_code
             logging.debug('CODIGO: %s'%str(code))
             r = res.text            
             r = r.replace('oneplay:', 'skyflix:')
