@@ -145,8 +145,9 @@ def catalog_route(type, id):
     else:
         server = f'https://{host}/logo?url='      
     if type == 'tv':
+        url = 'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json'
         try:
-            r = requests.get('https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+            r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
             code = r.status_code
             logging.debug('CODIGO: %s'%str(code))
             if r.status_code == 200:
@@ -162,7 +163,7 @@ def catalog_route(type, id):
                 })
         except:
             try:
-                r = requests.get('https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+                r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
                 code = r.status_code
                 logging.debug('CODIGO: %s'%str(code))                
                 if r.status_code == 200:
@@ -211,8 +212,11 @@ def meta(type,id):
     if type == 'tv':
         id_channels = id.split(':')[1]
         url = f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json'
+        logging.debug('URL: %s'%str(url))  
         try:
             r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+            code = r.status_code
+            logging.debug('CODE: %s'%str(code))            
             text = r.text
             text = text.replace('oneplay:', 'skyflix:')
             text = text.replace('https', server+'https')
@@ -221,7 +225,9 @@ def meta(type,id):
             response = jsonify(data)
         except:
             try:
-                r = requests.get(f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+                r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+                code = r.status_code
+                logging.debug('CODE: %s'%str(code))                   
                 text = r.text
                 text = text.replace('oneplay:', 'skyflix:')
                 text = text.replace('https', server+'https')
@@ -246,6 +252,7 @@ def stream(type, id):
     if type == 'tv':
         id_channels = id.split(':')[1]
         url = f'https://api.allorigins.win/raw?url=https://oneplayhd.com/stremio_oneplay/stream/tv/oneplay:{id_channels}.json'
+        logging.debug('URL: %s'%str(url)) 
         try:
             res = requests.get(url,headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
             res.raise_for_status()
