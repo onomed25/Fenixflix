@@ -2734,14 +2734,15 @@ def canais_list(server):
         'genres': ['Noticias'],
         'streams': [
             {
-                "url": "https://play.embehub.com/CNNBRASIL/index.fmp4.m3u8",
+                "url": "https://video01.soultv.com.br/cnnbrasil/cnnbrasil/chunklist_w2038826838.m3u8",
                 "title": "CNN BRASIL",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/CNNBRASIL/embed.html"
+                            "Origin": "https://soultv.com.br",
+                            "Referer": "https://soultv.com.br/"
                         }
                     }
                 }
@@ -4402,7 +4403,32 @@ def canais_list(server):
                 }
             }
         ]
-    }                                                                                                                       
+    }, 
+    {
+        'id': 'skyflix:timesbrasil',
+        'type': 'tv',
+        'name': 'TIMES BRASIL | CNBC',
+        'poster': f"{server}https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Times_Brasil_CNBC_logo.svg/2560px-Times_Brasil_CNBC_logo.svg.png",
+        'background': f"{server}https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Times_Brasil_CNBC_logo.svg/2560px-Times_Brasil_CNBC_logo.svg.png",
+        'description': 'canal TIMES BRASIL | CNBC ao vivo.',
+        'genres': ['Noticias'],
+        'streams': [
+            {
+                "url": "https://video01.soultv.com.br/timesbrasil/timesbrasil/chunklist_w1994015498.m3u8",
+                "title": "TIMES BRASIL | CNBC",
+                "behaviorHints": {
+                    "notWebReady": True,
+                    "proxyHeaders": {
+                        "request": {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                            "Origin": "https://soultv.com.br",
+                            "Referer": "https://soultv.com.br/"
+                        }
+                    }
+                }
+            }
+        ]
+    }                                                                                                                           
     ]
     return canais
  
