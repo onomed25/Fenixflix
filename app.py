@@ -2,10 +2,9 @@ from flask import Flask, jsonify, request, make_response, render_template, Respo
 from netcine import catalog_search, search_link
 import json
 import requests
-import logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+import canais
 
-app = Flask(__name__)
+app_ = Flask(__name__)
 
 # Função para adicionar headers CORS
 def add_cors_headers(response):
@@ -63,7 +62,7 @@ MANIFEST = {
 }
 
 
-@app.route('/')
+@app_.route('/')
 def home():
     name = MANIFEST['name']
     types = MANIFEST['types']
@@ -72,7 +71,7 @@ def home():
     version = MANIFEST['version']
     return render_template('index.html', name=name, types=types, logo=logo, description=description, version=version)
 
-@app.route('/logo')
+@app_.route('/logo')
 def proxy_logo():
     image_url = request.args.get('url')
 
@@ -99,46 +98,32 @@ def proxy_logo():
         return f"Erro ao buscar a imagem: {str(e)}", 500
 
 # Rota para o manifesto do addon
-@app.route('/manifest.json')
+@app_.route('/manifest.json')
 def manifest():
     response = jsonify(MANIFEST)
     return add_cors_headers(response)
 
-@app.route('/catalog/tv/skyflix/genre=<id>.json')
+@app_.route('/catalog/tv/skyflix/genre=<id>.json')
 def genres(id):
     host = request.host
     if 'localhost' in host or '127.0.0.1' in host:
         server = f'http://{host}/logo?url='
     else:
         server = f'https://{host}/logo?url='
-    url = f'https://api.codetabs.com/v1/proxy/?quest=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay/genre={id}.json'
-    try:
-        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-        code = res.status_code
-        logging.debug('CODIGO: %s'%str(code))
-        r = res.text
-        r = r.replace('oneplay:', 'skyflix:')
-        r = r.replace('https', server+'https')
-        data = json.loads(r)
-        response = jsonify(data) 
-    except:
-        try:
-            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-            code = res.status_code
-            logging.debug('CODIGO: %s'%str(code))
-            r = res.text            
-            r = r.replace('oneplay:', 'skyflix:')
-            r = r.replace('https', server+'https')
-            data = json.loads(r)
-            response = jsonify(data) 
-        except:        
-            response = jsonify({
-            "metas": []
-            })
+    canais_ = []
+    if not 'skip' in id:
+        list_canais = canais.canais_list(server)
+        for canal in list_canais:
+            canal.pop('streams')
+            if id in canal['genres']:
+                canais_.append(canal)      
+    response = jsonify({
+    "metas": canais_
+    })
     return add_cors_headers(response)
 
 # Rota para o catálogo
-@app.route('/catalog/<type>/<id>.json')
+@app_.route('/catalog/<type>/<id>.json')
 def catalog_route(type, id):
     host = request.host
     if 'localhost' in host or '127.0.0.1' in host:
@@ -146,52 +131,22 @@ def catalog_route(type, id):
     else:
         server = f'https://{host}/logo?url='      
     if type == 'tv':
-        url = 'https://api.codetabs.com/v1/proxy/?quest=https://oneplayhd.com/stremio_oneplay/catalog/tv/OnePlay.json'
-        try:
-            r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-            code = r.status_code
-            logging.debug('CODIGO: %s'%str(code))
-            if r.status_code == 200:
-                text = r.text
-                text = text.replace('oneplay:', 'skyflix:')
-                text = text.replace('https', server+'https')
-                text = text.encode()
-                data = json.loads(text)
-                response = jsonify(data)
-            else:
-                response = jsonify({
-                    "metas": []
-                })
-        except:
-            try:
-                r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-                code = r.status_code
-                logging.debug('CODIGO: %s'%str(code))                
-                if r.status_code == 200:
-                    text = r.text
-                    text = text.replace('oneplay:', 'skyflix:')
-                    text = text.replace('https', server+'https')
-                    text = text.encode()
-                    data = json.loads(text)
-                    response = jsonify(data)
-                else:
-                    response = jsonify({
-                        "metas": []
-                    })
-            except:
-                response = jsonify({
-                    "metas": []
-                })                              
-
-
+        canais_ = []
+        list_canais = canais.canais_list(server)
+        for canal in list_canais:
+            canal.pop('streams')
+            canais_.append(canal)
+        response = jsonify({
+        "metas": canais_  
+            })      
     else:
         response = jsonify({
         "metas": []
-        })
+    })  
     return add_cors_headers(response)
 
 # Rota para pesquisa
-@app.route('/catalog/<type>/skyflix/search=<query>.json')
+@app_.route('/catalog/<type>/skyflix/search=<query>.json')
 def search(type, query):
     catalog = catalog_search(query)
     if catalog:
@@ -203,7 +158,7 @@ def search(type, query):
     })
     return add_cors_headers(response)
 
-@app.route('/meta/<type>/<id>.json')
+@app_.route('/meta/<type>/<id>.json')
 def meta(type,id):
     host = request.host
     if 'localhost' in host or '127.0.0.1' in host:
@@ -211,34 +166,14 @@ def meta(type,id):
     else:
         server = f'https://{host}/logo?url='      
     if type == 'tv':
-        id_channels = id.split(':')[1]
-        url = f'https://api.codetabs.com/v1/proxy/?quest=https://oneplayhd.com/stremio_oneplay/meta/tv/oneplay:{id_channels}.json'
-        logging.debug('URL: %s'%str(url))  
-        try:
-            r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-            code = r.status_code
-            logging.debug('CODE: %s'%str(code))            
-            text = r.text
-            text = text.replace('oneplay:', 'skyflix:')
-            text = text.replace('https', server+'https')
-            text = text.encode()
-            data = json.loads(text)
-            response = jsonify(data)
-        except:
-            try:
-                r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-                code = r.status_code
-                logging.debug('CODE: %s'%str(code))                   
-                text = r.text
-                text = text.replace('oneplay:', 'skyflix:')
-                text = text.replace('https', server+'https')
-                text = text.encode()
-                data = json.loads(text)
-                response = jsonify(data)
-            except:
-                response = jsonify({
-                "meta": {}
-                })                
+        meta = {}
+        list_canais = canais.canais_list(server)
+        for canal in list_canais:
+            if canal['id'] == id:
+                canal.pop('streams')
+                meta['meta'] = canal
+                break
+        response = jsonify(meta)               
 
     else:
         response = jsonify({
@@ -248,24 +183,21 @@ def meta(type,id):
            
 
 # Rota para streams (exemplo simples)
-@app.route('/stream/<type>/<id>.json')
+@app_.route('/stream/<type>/<id>.json')
 def stream(type, id):
+    host = request.host
+    if 'localhost' in host or '127.0.0.1' in host:
+        server = f'http://{host}/logo?url='
+    else:
+        server = f'https://{host}/logo?url='      
     if type == 'tv':
-        id_channels = id.split(':')[1]
-        url = f'https://api.codetabs.com/v1/proxy/?quest=https://oneplayhd.com/stremio_oneplay/stream/tv/oneplay:{id_channels}.json'
-        logging.debug('URL: %s'%str(url)) 
-        try:
-            res = requests.get(url,headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-            res.raise_for_status()
-            r = res.json()
-        except:
-            try:
-                res = requests.get(url,headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-                res.raise_for_status()
-                r = res.json()                
-            except:
-                r = {'streams': []}
-        scrape_ = r.get('streams', []) 
+        scrape_ = []
+        list_canais = canais.canais_list(server)
+        for canal in list_canais:
+            if canal['id'] == id:
+                streams_list = canal['streams']
+                scrape_ = streams_list
+                break
     elif type == 'movie' or type == 'series':
         try:
             stream_, headers = search_link(id)
@@ -294,11 +226,11 @@ def stream(type, id):
     return add_cors_headers(response)
 
 # Rota para lidar com requisições OPTIONS (necessário para CORS)
-@app.route('/<path:path>', methods=['OPTIONS'])
+@app_.route('/<path:path>', methods=['OPTIONS'])
 def options_handler(path):
     response = make_response()
     return add_cors_headers(response)
 
 if __name__ == '__main__':
     # executar server
-    app.run(debug=True ,host='0.0.0.0', port=80)
+    app_.run(debug=True ,host='0.0.0.0', port=80)
