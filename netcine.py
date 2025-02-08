@@ -218,7 +218,7 @@ def scrape_search(host,headers,text,year_imdb):
 
 def search_link(id):
     stream = ''
-    host = 'https://netcinetv.fi/'
+    host = 'https://netcinetv.bz/'
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, como Gecko) Chrome/88.0.4324.96 Safari/537.36"}
     headers_ = {}
     try:
