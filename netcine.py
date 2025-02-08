@@ -162,7 +162,13 @@ def scrape_search(host,headers,text,year_imdb):
         else:
             search_ = text
     except:
-        search_ = text 
+        search_ = text
+    try:
+        search_count = len(search_.split(' '))
+        if search_count > 2 and ':' in text:
+            search_ = text.split(': ')[1]
+    except:
+        pass    
     url_search = new_host + '?s=' + quote_plus(search_)
     headers.update({'Cookie': 'XCRF%3DXCRF'})
     r = requests.get(url_search,headers=headers)
@@ -176,6 +182,8 @@ def scrape_search(host,headers,text,year_imdb):
             name = name.decode('utf-8')
         except:
             pass
+        name_backup = name
+        text_backup = text
         try:
             keys = name.split(' ')
             name2 = ' '.join(keys[:-1])
@@ -217,6 +225,22 @@ def scrape_search(host,headers,text,year_imdb):
             count_text = len(name3.split(' '))
         except:
             count_text = 0
+        try:
+            if ':' in name_backup:
+                name4 = name_backup.split(': ')[1]
+                name4 = name4.lower()
+            else:
+                name4 = ''
+        except:
+            name4 = ''
+        try:
+            if ':' in text_backup:
+                text3 = text_backup.split(': ')[1]
+                text3 = text3.lower()
+            else:
+                text3 = ''
+        except:
+            text3 = ''
         if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
             img = i.find('div', {'class': 'imagen'})
             link = img.find('a').get('href', '')
@@ -232,7 +256,11 @@ def scrape_search(host,headers,text,year_imdb):
         elif text2 in name3 and str(int(year_imdb) - 1) in str(year) and count_text > 1:
             img = i.find('div', {'class': 'imagen'})
             link = img.find('a').get('href', '')            
-            return link, new_host                       
+            return link, new_host
+        elif text3 in name4 and str(year_imdb) in str(year) and text3 and name4:
+            img = i.find('div', {'class': 'imagen'})
+            link = img.find('a').get('href', '')            
+            return link, new_host                                
     return '', ''   
 
 
@@ -282,4 +310,6 @@ def search_link(id):
     except:
         pass
     return stream, headers_ 
+
+
 
