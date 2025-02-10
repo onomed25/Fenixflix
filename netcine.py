@@ -249,6 +249,15 @@ def scrape_search(host,headers,text,year_imdb):
             name5 = name.replace('&', 'e')
         else:
             name5 = name
+
+        if ' e ' in text:
+            text5 = text.replace(' e ', ' & ')
+        else:
+            text5 = text 
+        if ' e ' in name:
+            name6 = name.replace(' e ', ' & ')
+        else:
+            name6 = name
         if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
             img = i.find('div', {'class': 'imagen'})
             link = img.find('a').get('href', '')
@@ -271,7 +280,11 @@ def scrape_search(host,headers,text,year_imdb):
         elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:
             img = i.find('div', {'class': 'imagen'})
             link = img.find('a').get('href', '')                     
-            return link, new_host                                
+            return link, new_host
+        elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:
+            img = i.find('div', {'class': 'imagen'})
+            link = img.find('a').get('href', '')                     
+            return link, new_host                                        
     return '', ''   
 
 
@@ -321,8 +334,5 @@ def search_link(id):
     except:
         pass
     return stream, headers_ 
-
-
-
 
 

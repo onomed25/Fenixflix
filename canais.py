@@ -10,14 +10,15 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://play.embehub.com/GloboSP/index.fmp4.m3u8",
+                "url": "https://embedcanaistv.site/globosp/video.m3u8",
                 "title": "Globo SP",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/GloboSP/embed.html"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -58,14 +59,15 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://play.embehub.com/SBTSP/index.fmp4.m3u8",
+                "url": "https://embedcanaistv.site/sbtsp/video.m3u8",
                 "title": "SBT SP",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/SBTSP/embed.html"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -82,14 +84,15 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://play.embehub.com/BANDSP/index.fmp4.m3u8",
+                "url": "https://embedcanaistv.site/bandsp/video.m3u8",
                 "title": "BAND SP",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/BANDSP/embed.html"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -106,14 +109,15 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://play.embehub.com/REDETV/index.fmp4.m3u8",
+                "url": "https://embedcanaistv.site/redetv/video.m3u8",
                 "title": "REDE TV",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/REDETV/embed.html"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -178,14 +182,15 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://play.embehub.com/RECORDSP/index.fmp4.m3u8",
+                "url": "https://embedcanaistv.site/recordsp/video.m3u8",
                 "title": "RECORD SP",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/RECORDSP/embed.html"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -1485,14 +1490,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://play.embehub.com/BANDSPORTS/index.fmp4.m3u8",
+                "url": "https://anonstream.zip/bandsports/tracks-v1a1/mono.m3u8",
                 "title": "BANDSPORTS",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/BANDSPORTS/embed.html"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1509,14 +1515,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://play.embehub.com/ESPN1/index.fmp4.m3u8",
+                "url": "https://super-cdn.link/espn/index.m3u8",
                 "title": "ESPN",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/ESPN1/embed.html"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1725,14 +1732,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://play.embehub.com/PREMIERE_CLUBES/index.fmp4.m3u8",
+                "url": "https://embedcanaistv.site/premiereclubes/video.m3u8",
                 "title": "PREMIERE CLUBES",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/PREMIERE_CLUBES/embed.html"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -1749,14 +1757,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://play.embehub.com/PREMIERE2/index.fmp4.m3u8",
+                "url": "https://embedcanaistv.site/premiere2/video.m3u8",
                 "title": "PREMIERE 2",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/PREMIERE2/embed.html"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -1821,14 +1830,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://play.embehub.com/PREMIERE5/index.fmp4.m3u8",
+                "url": "https://embedcanaistv.site/premiere5/video.m3u8",
                 "title": "PREMIERE 5",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/PREMIERE5/embed.html"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -1845,14 +1855,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://play.embehub.com/PREMIERE6/index.fmp4.m3u8",
+                "url": "https://embedcanaistv.site/premiere6/video.m3u8",
                 "title": "PREMIERE 6",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/PREMIERE6/embed.html"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
