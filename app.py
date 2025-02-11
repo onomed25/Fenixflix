@@ -233,4 +233,4 @@ def options_handler(path):
 
 if __name__ == '__main__':
     # executar server
-    app_.run(debug=True ,host='0.0.0.0', port=8080)
+    app_.run(debug=True ,host='0.0.0.0', port=80)

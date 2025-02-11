@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Exponha a porta em que a aplicação irá rodar
-EXPOSE 8080
+EXPOSE 80
 
 # Comando para rodar a aplicação usando Gunicorn
 #CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app_"]
