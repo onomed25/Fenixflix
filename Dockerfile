@@ -16,13 +16,9 @@ COPY . .
 # Exponha a porta em que a aplicação irá rodar
 EXPOSE 80
 
-# Defina a variável de ambiente PORT com um valor padrão
-ENV PORT=80
-
 # Comando para rodar a aplicação usando Gunicorn
 # render
-#CMD ["gunicorn", "app:app_", "--bind", "0.0.0.0:80", "--log-level", "debug", "--access-logfile", "-"]
+CMD ["gunicorn", "app:app_", "--bind", "0.0.0.0:80", "--log-level", "debug", "--access-logfile", "-"]
 # beamup cli
 #CMD ["sh", "-c", "gunicorn app:app_ --bind 0.0.0.0:${PORT} --log-level debug --access-logfile -"]
-
-CMD ["python", "app.py"]
+# CMD ["python", "app.py"]
