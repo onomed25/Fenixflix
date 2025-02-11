@@ -3,6 +3,7 @@ from netcine import catalog_search, search_link
 import json
 import requests
 import canais
+import os
 
 app_ = Flask(__name__)
 
@@ -231,6 +232,7 @@ def options_handler(path):
     response = make_response()
     return add_cors_headers(response)
 
-# if __name__ == '__main__':
-#     # executar server
-#     app_.run(debug=True ,host='0.0.0.0', port=80)
+if __name__ == '__main__':
+    # executar server
+    port = int(os.environ.get('PORT', 80))
+    app_.run(debug=True ,host='0.0.0.0', port=port)
