@@ -1,0 +1,26 @@
+{
+    "scripts": {
+      "dokku": {
+        "predeploy": "echo 'Running predeploy script'",
+        "postdeploy": "echo 'Running postdeploy script'"
+      }
+    },
+    "formation": {
+      "web": {
+        "quantity": 1,
+        "size": "1x"
+      }
+    },
+    "addons": [],
+    "env": {},
+    "buildpacks": [],
+    "healthchecks": {
+      "web": {
+        "type": "http",
+        "path": "/",
+        "timeout": 5,
+        "interval": 30,
+        "attempts": 3
+      }
+    }
+  }
