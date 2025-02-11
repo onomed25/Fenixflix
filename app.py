@@ -4,6 +4,9 @@ import json
 import requests
 import canais
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app_ = Flask(__name__)
 
@@ -234,5 +237,5 @@ def options_handler(path):
 
 # if __name__ == '__main__':
 #     # executar server
-#     port = int(os.environ.get('PORT'))
+#     port = int(os.getenv('PORT', 55771))
 #     app_.run(debug=True ,host='0.0.0.0', port=port)
