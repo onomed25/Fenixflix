@@ -235,9 +235,9 @@ def options_handler(path):
     response = make_response()
     return add_cors_headers(response)
 
-if __name__ == '__main__':
-    # executar server
-    #port = int(os.getenv('PORT', 55771))
-    #port = int(os.getenv('PORT', os.environ('PORT', 5000)))
-    port = int(os.environ('PORT', 5000))
-    app_.run(debug=True ,host='0.0.0.0', port=port)
+# if __name__ == '__main__':
+#     # executar server
+#     #port = int(os.getenv('PORT', 55771))
+#     #port = int(os.getenv('PORT', os.environ('PORT', 5000)))
+#     port = int(os.environ('PORT', 5000))
+#     app_.run(debug=True ,host='0.0.0.0', port=port)
