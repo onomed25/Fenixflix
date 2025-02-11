@@ -16,5 +16,5 @@ COPY . .
 # Exponha a porta em que a aplicação irá rodar
 EXPOSE 80
 
-# Comando para rodar a aplicação
-CMD ["python", "app.py"]
+# Comando para rodar a aplicação usando Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:80", "app:app_"]
