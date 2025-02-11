@@ -19,4 +19,5 @@ COPY . .
 # CMD ["gunicorn", "app:app_", "--bind", "0.0.0.0:80", "--log-level", "debug", "--access-logfile", "-"]
 # beamup cli
 EXPOSE $PORT
-CMD ["sh", "-c", "gunicorn app:app_ --bind 0.0.0.0:${PORT} --log-level debug --access-logfile -"]
+# CMD ["sh", "-c", "gunicorn app:app_ --bind 0.0.0.0:${PORT} --log-level debug --access-logfile -"]
+CMD ["python", "app.py"]
