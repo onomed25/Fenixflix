@@ -17,5 +17,5 @@ COPY . .
 EXPOSE 80
 
 # Comando para rodar a aplicação usando Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:80", "app:app_"]
+CMD ["gunicorn", "app:app_", "--bind", "0.0.0.0:80", "--log-level", "debug", "--access-logfile", "-"]
 # CMD ["python", "app.py"]
