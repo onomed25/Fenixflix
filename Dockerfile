@@ -14,9 +14,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Exponha a porta em que a aplicação irá rodar
-#render.com
-# EXPOSE 80
-# CMD ["gunicorn", "app:app_", "--bind", "0.0.0.0:80", "--log-level", "debug", "--access-logfile", "-"]
-# beamup cli
-EXPOSE $PORT 5000 55771
-CMD ["sh", "-c", "gunicorn app:app_ --bind 0.0.0.0:${PORT} --log-level debug --access-logfile -"]
+EXPOSE 80
+CMD ["gunicorn", "app:app_", "--bind", "0.0.0.0:80", "--log-level", "debug", "--access-logfile", "-"]
