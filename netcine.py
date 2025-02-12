@@ -151,9 +151,10 @@ def opcoes_filmes(url,headers, host):
         return ''
 
 
-def scrape_search(host,headers,text,year_imdb,type):
+def scrape_search(host,headers,text,alternate,year_imdb,type):
     # fix search
     text = text.replace('&amp;', '&')
+    alternate = alternate.replace('&amp;', '&')
     url = requests.get(host,headers=headers).url
     url_parsed = urlparse(url)
     new_host = url_parsed.scheme + '://' + url_parsed.hostname + '/'
@@ -186,6 +187,7 @@ def scrape_search(host,headers,text,year_imdb,type):
             pass
         name_backup = name
         text_backup = text
+        textalternate_backup = alternate
         try:
             keys = name.split(' ')
             name2 = ' '.join(keys[:-1])
@@ -206,6 +208,11 @@ def scrape_search(host,headers,text,year_imdb,type):
             text = text.replace(':', '')
         except:
             pass
+        try:
+            textalternate = alternate.lower()
+            textalternate = textalternate.replace(':', '')
+        except:
+            pass        
         try:
             name = name.lower()
             name = name.replace(':', '')
@@ -243,6 +250,14 @@ def scrape_search(host,headers,text,year_imdb,type):
                 text3 = ''
         except:
             text3 = ''
+        try:
+            if ':' in textalternate_backup:
+                textalternate2 = textalternate_backup.split(': ')[1]
+                textalternate2 = textalternate2.lower()
+            else:
+                textalternate2 = ''
+        except:
+            textalternate2 = ''            
         if '&' in text:
             text4 = text.replace('&', 'e')
         else:
@@ -280,6 +295,8 @@ def scrape_search(host,headers,text,year_imdb,type):
                 return link, new_host
             elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:                   
                 return link, new_host
+            elif textalternate in name and str(year_imdb) in str(year) or textalternate2 in name4 and str(year_imdb) in str(year):
+                return link, new_host
         elif type == 'movies' and not '/tvshows/' in link: 
             if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
                 return link, new_host
@@ -294,7 +311,9 @@ def scrape_search(host,headers,text,year_imdb,type):
             elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:                   
                 return link, new_host
             elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:                   
-                return link, new_host                                                   
+                return link, new_host
+            elif textalternate in name and str(year_imdb) in str(year) or textalternate2 in name4 and str(year_imdb) in str(year):
+                return link, new_host                                                 
     return '', ''   
 
 
@@ -312,7 +331,8 @@ def search_link(id):
             search_text, year_imdb = search_term(imdb)
             if search_text and year_imdb:
                 text = search_text[-1]
-                link, new_host = scrape_search(host,headers,text,year_imdb,'tvshows')
+                alternate = search_text[0]
+                link, new_host = scrape_search(host,headers,text,alternate,year_imdb,'tvshows')
                 if '/tvshows/' in link:
                     #### SÉRIES EPISODES
                     r = requests.get(link,headers=headers)
@@ -337,11 +357,14 @@ def search_link(id):
             search_text, year_imdb = search_term(imdb)
             if search_text and year_imdb:
                 text = search_text[-1]
-                link, new_host = scrape_search(host,headers,text,year_imdb,'movies')
+                alternate = search_text[0]
+                link, new_host = scrape_search(host,headers,text,alternate,year_imdb,'movies')
                 if not '/tvshows/' in link:
                     page = opcoes_filmes(link,headers, new_host)
                     stream, headers_  = resolve_stream(page)
     except:
         pass
     return stream, headers_ 
+
+
 
