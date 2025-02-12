@@ -151,7 +151,7 @@ def opcoes_filmes(url,headers, host):
         return ''
 
 
-def scrape_search(host,headers,text,year_imdb):
+def scrape_search(host,headers,text,year_imdb,type):
     # fix search
     text = text.replace('&amp;', '&')
     url = requests.get(host,headers=headers).url
@@ -260,33 +260,41 @@ def scrape_search(host,headers,text,year_imdb):
             name6 = name.replace(' e ', ' & ')
         else:
             name6 = name
-        if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
+        try:
             img = i.find('div', {'class': 'imagen'})
             link = img.find('a').get('href', '')
-            return link, new_host
-        elif text2 in name3 and str(year_imdb) in str(year):
-            img = i.find('div', {'class': 'imagen'})
-            link = img.find('a').get('href', '')
-            return link, new_host 
-        elif text2 in name3 and str(int(year_imdb) + 1) in str(year) and count_text > 1:
-            img = i.find('div', {'class': 'imagen'})
-            link = img.find('a').get('href', '')            
-            return link, new_host
-        elif text2 in name3 and str(int(year_imdb) - 1) in str(year) and count_text > 1:
-            img = i.find('div', {'class': 'imagen'})
-            link = img.find('a').get('href', '')            
-            return link, new_host
-        elif text3 in name4 and str(year_imdb) in str(year) and text3 and name4:
-            img = i.find('div', {'class': 'imagen'})
-            link = img.find('a').get('href', '') 
-        elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:
-            img = i.find('div', {'class': 'imagen'})
-            link = img.find('a').get('href', '')                     
-            return link, new_host
-        elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:
-            img = i.find('div', {'class': 'imagen'})
-            link = img.find('a').get('href', '')                     
-            return link, new_host                                        
+        except:
+            link = ''
+        if type == 'tvshows' and '/tvshows/' in link:
+            if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
+                return link, new_host
+            elif text2 in name3 and str(year_imdb) in str(year):
+                return link, new_host 
+            elif text2 in name3 and str(int(year_imdb) + 1) in str(year) and count_text > 1:        
+                return link, new_host
+            elif text2 in name3 and str(int(year_imdb) - 1) in str(year) and count_text > 1:        
+                return link, new_host
+            elif text3 in name4 and str(year_imdb) in str(year) and text3 and name4:
+                return link, new_host
+            elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:                   
+                return link, new_host
+            elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:                   
+                return link, new_host
+        elif type == 'movies' and not '/tvshows/' in link: 
+            if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
+                return link, new_host
+            elif text2 in name3 and str(year_imdb) in str(year):
+                return link, new_host 
+            elif text2 in name3 and str(int(year_imdb) + 1) in str(year) and count_text > 1:        
+                return link, new_host
+            elif text2 in name3 and str(int(year_imdb) - 1) in str(year) and count_text > 1:        
+                return link, new_host
+            elif text3 in name4 and str(year_imdb) in str(year) and text3 and name4:
+                return link, new_host
+            elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:                   
+                return link, new_host
+            elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:                   
+                return link, new_host                                                   
     return '', ''   
 
 
@@ -304,7 +312,7 @@ def search_link(id):
             search_text, year_imdb = search_term(imdb)
             if search_text and year_imdb:
                 text = search_text[-1]
-                link, new_host = scrape_search(host,headers,text,year_imdb)
+                link, new_host = scrape_search(host,headers,text,year_imdb,'tvshows')
                 if '/tvshows/' in link:
                     #### SÉRIES EPISODES
                     r = requests.get(link,headers=headers)
@@ -329,12 +337,11 @@ def search_link(id):
             search_text, year_imdb = search_term(imdb)
             if search_text and year_imdb:
                 text = search_text[-1]
-                link, new_host = scrape_search(host,headers,text,year_imdb)
+                link, new_host = scrape_search(host,headers,text,year_imdb,'movies')
                 if not '/tvshows/' in link:
                     page = opcoes_filmes(link,headers, new_host)
                     stream, headers_  = resolve_stream(page)
     except:
         pass
     return stream, headers_ 
-
 
