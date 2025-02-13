@@ -143,8 +143,9 @@ def stream(type: str, id: str, request: Request):
                     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'}
                     try:
                         page = 'https://oneplayhd.com/rcproxy/rcproxy.php?url=' + quote(page)
-                        r = requests.get(page,headers=headers,allow_redirects=True)
-                        stream_url = r.url
+                        r = requests.get(page,headers=headers,allow_redirects=False)
+                        if r.status_code in [301, 302]:
+                            stream_url = r.headers.get("Location")
                         streams_list[0]['url'] = stream_url
                     except:
                         pass               

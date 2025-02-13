@@ -4444,5 +4444,4 @@ def canais_list(server):
     }                                                                                                                           
     ]
     return canais
- 
- 
+
