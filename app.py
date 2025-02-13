@@ -7,6 +7,7 @@ from netcine import catalog_search, search_link
 import requests
 import canais
 import os
+from urllib.parse import quote_plus
 
 templates = Environment(loader=FileSystemLoader("templates"))
 app = FastAPI()
@@ -139,9 +140,10 @@ def stream(type: str, id: str, request: Request):
                 page = canal.get('page', '')
                 streams_list = canal['streams']
                 if page and server == 'redecanais':
-                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36', 'Origin': 'https://redecanaistv.ps', 'Referer': 'https://redecanaistv.ps/', 'Cookie': 'modalVisited=true'}
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'}
                     try:
-                        stream_url = requests.get(page,headers=headers,timeou=4).url
+                        page = 'https://oneplayhd.com/rcproxy/rcproxy.php?url=' + quote_plus(page)
+                        stream_url = requests.get(page,headers=headers).url
                         streams_list[0]['url'] = stream_url
                     except:
                         pass               
