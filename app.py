@@ -136,21 +136,15 @@ def stream(type: str, id: str, request: Request):
         list_canais = canais.canais_list(server)
         for canal in list_canais:
             if canal['id'] == id:
-                server = canal.get('server', '')
-                page = canal.get('page', '')
+                rc = canal.get('rc', {})
                 streams_list = canal['streams']
-                if page and server == 'redecanais':
-                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-                             'Origin': 'https://redecanaistv.ps',
-                             'Referer': 'https://redecanaistv.ps/',
-                             'Cookie': 'modalVisited=true'}
+                if rc:
                     try:
-                        r = requests.get(page,headers=headers,allow_redirects=False,timeout=6)
-                        if r.status_code in [301, 302]:
-                            stream_url = r.headers.get("Location")
-                            if stream_url.startswith('//'):
-                                stream_url = 'https:' + stream_url
-                        streams_list[0]['url'] = stream_url
+                        token = rc.get('token', '')
+                        channel = rc.get('channel', '')
+                        if token and channel:
+                            stream_rc = canais.get_rc(channel,token)
+                            streams_list[0]['url'] = stream_rc
                     except:
                         pass               
                 scrape_ = streams_list
