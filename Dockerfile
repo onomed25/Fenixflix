@@ -15,4 +15,4 @@ COPY . .
 
 # Exponha a porta em que a aplicação irá rodar
 EXPOSE 80
-CMD ["gunicorn", "app:app_", "--bind", "0.0.0.0:80", "--log-level", "debug", "--access-logfile", "-"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80", "--workers=1", "--log-level", "debug"]
