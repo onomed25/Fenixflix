@@ -140,10 +140,13 @@ def stream(type: str, id: str, request: Request):
                 page = canal.get('page', '')
                 streams_list = canal['streams']
                 if page and server == 'redecanais':
-                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'}
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+                             'Origin': 'https://redecanaistv.ps',
+                             'Referer': 'https://redecanaistv.ps/',
+                             'Cookie': 'modalVisited=true'}
                     try:
-                        page = 'https://oneplayhd.com/rcproxy/rcproxy.php?url=' + quote(page)
-                        r = requests.get(page,headers=headers,allow_redirects=False,timeout=4)
+                        #page = 'https://oneplayhd.com/rcproxy/rcproxy.php?url=' + quote(page)
+                        r = requests.get(page,headers=headers,allow_redirects=False,timeout=6)
                         if r.status_code in [301, 302]:
                             stream_url = r.headers.get("Location")
                         streams_list[0]['url'] = stream_url
