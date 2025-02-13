@@ -4138,14 +4138,15 @@ def canais_list(server):
         'genres': ['Variedades'],
         'streams': [
             {
-                "url": "https://play.embehub.com/bbbcam01/index.fmp4.m3u8",
+                "url": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOcmZVMU1jRXpoRDExdzJ0U1k9",
                 "title": "BBB 25 CAM 1",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/bbbcam01/embed.html"
+                            "Referer": "https://redecanaistv.ps/",
+                            "Cookie": "modalVisited=true"
                         }
                     }
                 }

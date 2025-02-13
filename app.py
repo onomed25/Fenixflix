@@ -27,9 +27,40 @@ MANIFEST = {
     "resources": ["catalog", "meta", "stream"],
     "types": ["tv", "movie", "series"],
     "catalogs": [
-        {"type": "tv", "id": "skyflix", "name": "SKYFLIX"},
-        {"type": "movie", "id": "skyflix", "name": "SKYFLIX", "extraSupported": ["search"]},
-        {"type": "series", "id": "skyflix", "name": "SKYFLIX", "extraSupported": ["search"]}
+        {
+            "type": "tv",
+            "id": "skyflix",
+            "name": "SKYFLIX",
+            "extra": [
+                {
+                    "name": "genre",
+                    "options": [
+                        "Canais Abertos",
+                        "Variedades",
+                        "Filmes e Series",
+                        "Documentarios",
+                        "Esportes",
+                        "Infantil",
+                        "Noticias",
+                        "PLUTO TV",
+                        "CANAL 24H"
+                    ],
+                    "isRequired": False
+                }
+            ]
+        },
+        {
+            "type": "movie",
+            "id": "skyflix",
+            "name": "SKYFLIX",
+            "extraSupported": ["search"]
+        },
+        {
+            "type": "series",
+            "id": "skyflix",
+            "name": "SKYFLIX",
+            "extraSupported": ["search"]
+        }
     ],
     "idPrefixes": ["skyflix", "tt"]
 }
