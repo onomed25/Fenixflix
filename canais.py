@@ -27,6 +27,8 @@ def canais_list(server):
     },
     {
         "id": "skyflix:globonordeste",
+        "server": "redecanais",
+        "page": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOcmVXRnNkRkRoRDJseHI3aWpaZzloZ0Z6UT0=",
         "type": "tv",
         "name": "Globo Nordeste",
         "poster": f"{server}https://embehub.com/img/globo.png",
@@ -42,7 +44,8 @@ def canais_list(server):
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/GLOBO_NORDESTE/embed.html"
+                            "Origin": "https://redecanaistv.ps",
+                            "Referer": "https://redecanaistv.ps/"
                         }
                     }
                 }
@@ -51,6 +54,8 @@ def canais_list(server):
     },
     {
         "id": "skyflix:sbtsp",
+        "server": "redecanais",
+        "page": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOclpVbEFlRmpoUzEwbz0=",
         "type": "tv",
         "name": "SBT SP",
         "poster": f"{server}https://embehub.com/img/thumb-sbt.jpg",
@@ -66,8 +71,8 @@ def canais_list(server):
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://embedcanaistv.com",
-                            "Referer": "https://embedcanaistv.com/"
+                            "Origin": "https://redecanaistv.ps",
+                            "Referer": "https://redecanaistv.ps/"
                         }
                     }
                 }
@@ -76,6 +81,8 @@ def canais_list(server):
     },
     {
         "id": "skyflix:bandsp",
+        "server": "redecanais",
+        "page": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOclpWbFFhRURoRDFGQmc=",        
         "type": "tv",
         "name": "BAND SP",
         "poster": f"{server}https://embehub.com/img/thumb-band.jpg",
@@ -91,8 +98,8 @@ def canais_list(server):
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://embedcanaistv.com",
-                            "Referer": "https://embedcanaistv.com/"
+                            "Origin": "https://redecanaistv.ps",
+                            "Referer": "https://redecanaistv.ps/"
                         }
                     }
                 }
@@ -101,6 +108,8 @@ def canais_list(server):
     },
     {
         "id": "skyflix:redetv",
+        "server": "redecanais",
+        "page": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOclpWbFFhRURoRDFGQmc=",        
         "type": "tv",
         "name": "REDE TV",
         "poster": f"{server}https://embehub.com/img/thumb-redetv.jpg",
@@ -116,8 +125,8 @@ def canais_list(server):
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://embedcanaistv.com",
-                            "Referer": "https://embedcanaistv.com/"
+                            "Origin": "https://redecanaistv.ps",
+                            "Referer": "https://redecanaistv.ps/"
                         }
                     }
                 }
@@ -1158,6 +1167,8 @@ def canais_list(server):
     },
     {
         'id': 'skyflix:cinemax',
+        'server': 'redecanais',
+        'page': 'https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOclpXRllkRVRoQzNGQmg3U2JU',
         'type': 'tv',
         'name': 'CINEMAX',
         'poster': f"{server}https://embehub.com/img/thumb-cinemax.jpg",
@@ -1166,15 +1177,15 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://anonstream.zip/cinemax/index.m3u8",
+                'url': "",
                 'title': "CINEMAX",
                 'behaviorHints': {
                     'notWebReady': True,
                     'proxyHeaders': {
                         'request': {
                             'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            'Origin': "https://embedstream.org",
-                            'Referer': "https://embedstream.org/"
+                            'Origin': "https://redecanaistv.ps",
+                            'Referer': "https://redecanaistv.ps/"
                         }
                     }
                 }
@@ -4138,18 +4149,8 @@ def canais_list(server):
         'genres': ['Variedades'],
         'streams': [
             {
-                "url": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOcmZVMU1jRXpoRDExdzJ0U1k9",
-                "title": "BBB 25 CAM 1",
-                "behaviorHints": {
-                    "notWebReady": True,
-                    "proxyHeaders": {
-                        "request": {
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://redecanaistv.ps/",
-                            "Cookie": "modalVisited=true"
-                        }
-                    }
-                }
+                "url": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOclpXRllkRVRoQzNGQmg3U2JU",
+                "title": "BBB 25 CAM 1"
             }
         ]
     },

@@ -131,7 +131,22 @@ def meta(type: str, id: str, request: Request):
 def stream(type: str, id: str, request: Request):
     server = f"https://{request.url.hostname}/logo?url="
     if type == "tv":
-        scrape_ = next((canal["streams"] for canal in canais.canais_list(server) if canal["id"] == id), [])
+        scrape_ = []
+        list_canais = canais.canais_list(server)
+        for canal in list_canais:
+            if canal['id'] == id:
+                server = canal.get('server', '')
+                page = canal.get('page', '')
+                streams_list = canal['streams']
+                if page and server == 'redecanais':
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36', 'Origin': 'https://redecanaistv.ps', 'Referer': 'https://redecanaistv.ps/', 'Cookie': 'modalVisited=true'}
+                    try:
+                        stream_url = requests.get(page,headers=headers,timeou=4).url
+                        streams_list[0]['url'] = stream_url
+                    except:
+                        pass               
+                scrape_ = streams_list
+                break
     elif type in ["movie", "series"]:
         try:
             stream_, headers = search_link(id)
