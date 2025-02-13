@@ -7,7 +7,7 @@ from netcine import catalog_search, search_link
 import requests
 import canais
 import os
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, quote
 
 templates = Environment(loader=FileSystemLoader("templates"))
 app = FastAPI()
@@ -142,8 +142,8 @@ def stream(type: str, id: str, request: Request):
                 if page and server == 'redecanais':
                     headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'}
                     try:
-                        page = 'https://oneplayhd.com/rcproxy/rcproxy.php?url=' + quote_plus(page)
-                        r = requests.get(page,headers=headers,allow_redirects=True).url
+                        page = 'https://oneplayhd.com/rcproxy/rcproxy.php?url=' + quote(page)
+                        r = requests.get(page,headers=headers,allow_redirects=True)
                         stream_url = r.url
                         streams_list[0]['url'] = stream_url
                     except:
