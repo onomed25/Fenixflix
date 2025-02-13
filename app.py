@@ -145,10 +145,11 @@ def stream(type: str, id: str, request: Request):
                              'Referer': 'https://redecanaistv.ps/',
                              'Cookie': 'modalVisited=true'}
                     try:
-                        #page = 'https://oneplayhd.com/rcproxy/rcproxy.php?url=' + quote(page)
                         r = requests.get(page,headers=headers,allow_redirects=False,timeout=6)
                         if r.status_code in [301, 302]:
                             stream_url = r.headers.get("Location")
+                            if stream_url.startswith('//'):
+                                stream_url = 'https:' + stream_url
                         streams_list[0]['url'] = stream_url
                     except:
                         pass               
