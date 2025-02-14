@@ -4309,6 +4309,7 @@ def canais_list(server):
     },
     {
         'id': 'skyflix:bbb25cam1',
+        "rc": {"token": "c0hIM0JOdmJWMUliRURoRDExdzJ0U1k9", "channel": "bbb25a"},
         'type': 'tv',
         'name': 'BBB 25 CAM 1',
         'poster': f"{server}https://embehub.com/img/bbb25.png",
@@ -4317,13 +4318,24 @@ def canais_list(server):
         'genres': ['Variedades'],
         'streams': [
             {
-                "url": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOclpXRllkRVRoQzNGQmg3U2JU",
-                "title": "BBB 25 CAM 1"
+                "url": "",
+                "title": "BBB 25 CAM 1",
+                "behaviorHints": {
+                    "notWebReady": True,
+                    "proxyHeaders": {
+                        "request": {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                            "Origin": "https://redecanaistv.ps",
+                            "Referer": "https://redecanaistv.ps"
+                        }
+                    }
+                }
             }
         ]
     },
     {
         'id': 'skyflix:bbb25cam2',
+        "rc": {"token": "c0hIM0JOdlZWVklVRmpoRDExdzJ0U1U9", "channel": "bbb25b"},
         'type': 'tv',
         'name': 'BBB 25 CAM 2',
         'poster': f"{server}https://embehub.com/img/bbb25.png",
@@ -4339,7 +4351,8 @@ def canais_list(server):
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/bbbcam02/embed.html"
+                            "Origin": "https://redecanaistv.ps",
+                            "Referer": "https://redecanaistv.ps"
                         }
                     }
                 }
@@ -4609,7 +4622,33 @@ def canais_list(server):
                 }
             }
         ]
-    }                                                                                                                           
+    },
+    {
+        'id': 'skyflix:nossofutebol',
+        "rc": {"token": "c0hIM0JOdmFXRkFkRWpoUDJrMTM3eUhlazloeEREMD0=", "channel": "nossofutebol"},
+        'type': 'tv',
+        'name': 'NOSSO FUTEBOL',
+        'poster': f"{server}https://redecanaistv.ps/player3/imgs-videos/Canais/nossofutebol.jpg",
+        'background': f"{server}https://redecanaistv.ps/player3/imgs-videos/Canais/nossofutebol.jpg",
+        'description': 'canal NOSSO FUTEBOL ao vivo.',
+        'genres': ['Esportes'],
+        'streams': [
+            {
+                "url": "",
+                "title": "NOSSO FUTEBOL",
+                "behaviorHints": {
+                    "notWebReady": True,
+                    "proxyHeaders": {
+                        "request": {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                            "Origin": "https://redecanaistv.ps",
+                            "Referer": "https://redecanaistv.ps/"
+                        }
+                    }
+                }
+            }
+        ]
+    }                                                                                                                              
     ]
     return canais
 
