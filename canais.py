@@ -4452,16 +4452,46 @@ def canais_list(server):
     ]
     return canais
 
+# def get_rc(channel,token):
+#     stream = ''
+#     try:
+#         headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0'}
+#         page = f'https://oneplayhd.com/rcproxy/rcproxy2.php?channel={quote(channel)}&token={quote(token)}'         
+#         r = requests.get(page,headers=headers,allow_redirects=False,timeout=6)
+#         if r.status_code in [301, 302]:
+#             stream = r.headers.get("Location")
+#             if stream.startswith('//'):
+#                 stream = 'https:' + stream               
+#     except:
+#         pass
+#     return stream
+
 def get_rc(channel,token):
     stream = ''
     try:
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0'}
-        page = f'https://oneplayhd.com/rcproxy/rcproxy2.php?channel={quote(channel)}&token={quote(token)}'         
-        r = requests.get(page,headers=headers,allow_redirects=False,timeout=6)
-        if r.status_code in [301, 302]:
-            stream = r.headers.get("Location")
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0',
+                'Origin': 'https://redecanaistv.ps',
+                'Referer': 'https://redecanaistv.ps/',
+                'Accept': '*/*',
+                'accept-language': 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3',
+                'accept-encoding': 'gzip, deflate, br, zstd',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-origin',
+                'x-requested-with': 'XMLHttpRequest'}
+        page = f'https://redecanaistv.ps/player3/chforms.api?canal={channel}'
+        cookie = {'modalVisited':'true'}
+        data = {'rctoken': token}
+        r = requests.post(page,headers=headers,cookies=cookie,data=data,timeout=4)
+        if r.status_code == 200:
+            stream = re.findall(r'src:\s*"(.*?)"', r.text)[-1]
             if stream.startswith('//'):
-                stream = 'https:' + stream               
+                stream = 'https:' + stream
+            # fix stream
+            stream = stream.replace('\n', '').replace(' ', '')
     except:
         pass
     return stream
+
+
+#print(get_rc('sbt', 'c0hIM0JOclVXVlljRWpoUzEwbz0='))
