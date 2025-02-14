@@ -1,6 +1,3 @@
-import requests
-import re
-
 def canais_list(server):
     canais = [
     {
@@ -30,7 +27,8 @@ def canais_list(server):
     },
     {
         "id": "skyflix:globonordeste",
-        "rc": {"token": "c0hIM0JOclVVMXNlRXpoRDJseHI3aWpaZzloZ0Z6UT0=", "channel": "bobonordeste"},        
+        "server": "redecanais",
+        "page": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOcmVXRnNkRkRoRDJseHI3aWpaZzloZ0Z6UT0=",
         "type": "tv",
         "name": "Globo Nordeste",
         "poster": f"{server}https://embehub.com/img/globo.png",
@@ -39,7 +37,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "",
+                "url": "https://play.embehub.com/GLOBO_NORDESTE/index.fmp4.m3u8",
                 "title": "Globo Nordeste",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -56,7 +54,8 @@ def canais_list(server):
     },
     {
         "id": "skyflix:sbtsp",
-        "rc": {"token": "c0hIM0JOclVXVlljRWpoUzEwbz0=", "channel": "sbt"},  
+        "server": "redecanais",
+        "page": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOclpVbEFlRmpoUzEwbz0=",
         "type": "tv",
         "name": "SBT SP",
         "poster": f"{server}https://embehub.com/img/thumb-sbt.jpg",
@@ -82,7 +81,8 @@ def canais_list(server):
     },
     {
         "id": "skyflix:bandsp",
-        "rc": {"token": "c0hIM0JOdmRWRmNZRmpoRDFGQmc=", "channel": "band"},         
+        "server": "redecanais",
+        "page": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOclpWbFFhRURoRDFGQmc=",        
         "type": "tv",
         "name": "BAND SP",
         "poster": f"{server}https://embehub.com/img/thumb-band.jpg",
@@ -108,7 +108,8 @@ def canais_list(server):
     },
     {
         "id": "skyflix:redetv",
-        "rc": {"token": "c0hIM0JOclVWMWNWRnpoVDBGcGg5REU9", "channel": "redetv"},        
+        "server": "redecanais",
+        "page": "https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOclpWbFFhRURoRDFGQmc=",        
         "type": "tv",
         "name": "REDE TV",
         "poster": f"{server}https://embehub.com/img/thumb-redetv.jpg",
@@ -1166,6 +1167,8 @@ def canais_list(server):
     },
     {
         'id': 'skyflix:cinemax',
+        'server': 'redecanais',
+        'page': 'https://redecanaistv.ps/link/stream.m3u8?categoria=fhd&canal=c0hIM0JOclpXRllkRVRoQzNGQmg3U2JU',
         'type': 'tv',
         'name': 'CINEMAX',
         'poster': f"{server}https://embehub.com/img/thumb-cinemax.jpg",
@@ -1732,7 +1735,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:premiereclubes",
-        "rc": {"token": "c0hIM0JOdmRWRlFWRlRoUngxdHA2U0xaZ3Q1L0ZqUDdLdz09", "channel": "premiereclubes"},
         "type": "tv",
         "name": "PREMIERE CLUBES",
         "poster": f"{server}https://embehub.com/img/thumb-premiereclubes.jpg",
@@ -1741,15 +1743,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://embedcanaistv.site/premiereclubes/video.m3u8",
                 "title": "PREMIERE CLUBES",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -1758,7 +1760,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:premiere2",
-        "rc": {"token": "c0hIM0JOclVWRm9aR3poUngxdHA2U0xaZ284PQ==", "channel": "premiere2"}, 
         "type": "tv",
         "name": "PREMIERE 2",
         "poster": f"{server}https://embehub.com/img/thumb-premiere2.jpg",
@@ -1767,15 +1768,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://embedcanaistv.site/premiere2/video.m3u8",
                 "title": "PREMIERE 2",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -1784,7 +1785,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:premiere3",
-        "rc": {"token": "c0hIM0JOclVVRmNZRURoUngxdHA2U0xaZ280PQ==", "channel": "premiere3"},
         "type": "tv",
         "name": "PREMIERE 3",
         "poster": f"{server}https://embehub.com/img/thumb-premiere3.jpg",
@@ -1793,15 +1793,14 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://play.embehub.com/PREMIERE3/index.fmp4.m3u8",
                 "title": "PREMIERE 3",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Referer": "https://play.embehub.com/PREMIERE3/embed.html"
                         }
                     }
                 }
@@ -1810,7 +1809,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:premiere4",
-        "rc": {"token": "c0hIM0JOclVVRkVlRmpoUngxdHA2U0xaZ29rPQ==", "channel": "premiere4"},
         "type": "tv",
         "name": "PREMIERE 4",
         "poster": f"{server}https://embehub.com/img/thumb-premiere4.jpg",
@@ -1819,15 +1817,14 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://play.embehub.com/PREMIERE4/index.fmp4.m3u8",
                 "title": "PREMIERE 4",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Referer": "https://play.embehub.com/PREMIERE4/embed.html"
                         }
                     }
                 }
@@ -1836,7 +1833,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:premiere5",
-        "rc": {"token": "c0hIM0JOclVXVklWR2poUngxdHA2U0xaZ29nPQ==", "channel": "premiere5"},
         "type": "tv",
         "name": "PREMIERE 5",
         "poster": f"{server}https://embehub.com/img/thumb-premiere5.jpg",
@@ -1845,15 +1841,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://embedcanaistv.site/premiere5/video.m3u8",
                 "title": "PREMIERE 5",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -1870,15 +1866,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://embedcanaistv.site/premiere6/video.m3u8",
                 "title": "PREMIERE 6",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedcanaistv.com",
+                            "Referer": "https://embedcanaistv.com/"
                         }
                     }
                 }
@@ -1887,7 +1883,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:premiere7",
-        "rc": {"token": "c0hIM0JOclVXVnNhRmpoUngxdHA2U0xaZ29vPQ==", "channel": "premiere7"},        
         "type": "tv",
         "name": "PREMIERE 7",
         "poster": f"{server}https://embehub.com/img/thumb-premiere7.jpg",
@@ -1896,15 +1891,14 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://play.embehub.com/PREMIERE7/index.fmp4.m3u8",
                 "title": "PREMIERE 7",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Referer": "https://play.embehub.com/PREMIERE7/embed.html"
                         }
                     }
                 }
@@ -4450,28 +4444,4 @@ def canais_list(server):
     }                                                                                                                           
     ]
     return canais
-
-def get_rc(channel,token):
-    stream = ''
-    try:
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0',
-                'Origin': 'https://redecanaistv.ps',
-                'Referer': 'https://redecanaistv.ps/',
-                'Accept': '*/*',
-                'accept-language': 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3',
-                'accept-encoding': 'gzip, deflate, br, zstd',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-origin',
-                'x-requested-with': 'XMLHttpRequest'}
-        page = f'https://redecanaistv.ps/player3/chforms.api?canal={channel}'
-        cookie = {'modalVisited':'true'}
-        data = {'rctoken': token}
-        r = requests.post(page,headers=headers,cookies=cookie,data=data,timeout=4)
-        stream = re.findall(r'src:\s*"(.*?)"', r.text)[-1]
-        if stream.startswith('//'):
-            stream = 'https:' + stream
-    except:
-        pass
-    return stream
-
+ 
