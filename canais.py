@@ -4472,9 +4472,7 @@ def get_rc(channel,token):
         headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0',
                 'Origin': 'https://redecanaistv.ps',
                 'Referer': 'https://redecanaistv.ps/',
-                'Accept': '*/*',
                 'accept-language': 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3',
-                'accept-encoding': 'gzip, deflate, br, zstd',
                 'sec-fetch-dest': 'empty',
                 'sec-fetch-mode': 'cors',
                 'sec-fetch-site': 'same-origin',
@@ -4482,13 +4480,15 @@ def get_rc(channel,token):
         page = f'https://redecanaistv.ps/player3/chforms.api?canal={channel}'
         cookie = {'modalVisited':'true'}
         data = {'rctoken': token}
-        r = requests.post(page,headers=headers,cookies=cookie,data=data,timeout=4)
+        r = requests.post(page,headers=headers,cookies=cookie,data=data,timeout=6)
         if r.status_code == 200:
             stream = re.findall(r'src:\s*"(.*?)"', r.text)[-1]
             if stream.startswith('//'):
                 stream = 'https:' + stream
             # fix stream
             stream = stream.replace('\n', '').replace(' ', '')
+        else:
+            stream = 'code_' + str(r.status_code)
     except:
         pass
     return stream
