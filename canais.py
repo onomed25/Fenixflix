@@ -1,6 +1,8 @@
 import requests
 import re
 from urllib.parse import quote_plus, quote
+from bs4 import BeautifulSoup
+import base64
 
 def canais_list(server):
     canais = [
@@ -4625,9 +4627,63 @@ def canais_list(server):
 #         pass
 #     return stream
 
+def unfuck_rc(html):
+    try:
+        secret = re.findall(r'replace.+?-\s*(\d+)', html)[0]
+        soup = BeautifulSoup(html, "html.parser")
+        script_content = soup.find('script').string
+        base64_values = []
+        for line in script_content.splitlines():
+            try:
+                line = line.split('""')[1]
+            except:
+                pass
+            if '"' in line:
+                bases_64 = re.findall(r'"(.*?)"', line)
+                if bases_64:
+                    for base64_value in bases_64:
+                        base64_values.append(str(base64_value))
+        nzB = ""
+        for value in base64_values:
+            decoded = base64.b64decode(value).decode('utf-8')
+            number = int(''.join(filter(str.isdigit, decoded)))
+            nzB += chr(number - int(secret))
+        if nzB:
+            html = nzB
+    except:
+        pass
+    return html 
+
+def get_token(channel): 
+    token = ''   
+    url = f'https://redecanaistv.ps/player3/ch.php?categoria=live&canal={channel}'
+    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0',
+                'Origin': 'https://redecanaistv.ps',
+                'Referer': 'https://redecanaistv.ps/',
+                'accept-language': 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-origin'}
+    cookie = {'modalVisited':'true'}
+    r = requests.get(url,headers=headers,cookies=cookie)
+    if r.status_code == 200:
+        src = r.text
+        html = unfuck_rc(src)
+        try:
+            token = re.findall(r"'rctoken':'(.*?)'", html)[-1]
+        except:
+            pass
+    return token
+
 def get_rc(channel,token):
     stream = ''
     try:
+        # fix token random
+        try:
+            token = get_token(channel)
+        except:
+            pass
+        # access channel
         headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0',
                 'Origin': 'https://redecanaistv.ps',
                 'Referer': 'https://redecanaistv.ps/',
@@ -4653,4 +4709,5 @@ def get_rc(channel,token):
     return stream
 
 
-#print(get_rc('sbt', 'c0hIM0JOclVXVlljRWpoUzEwbz0='))
+
+# print(get_rc('bobosp', 'c0hIM0JOdmVXVk1VRmpoRDJseHI4emM9'))
