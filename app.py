@@ -163,6 +163,10 @@ def stream(type: str, id: str, request: Request):
                         if token and channel:
                             stream_rc = canais.get_rc(channel,token)
                             streams_list[0]['url'] = stream_rc
+                            try:
+                                streams_list[0]["behaviorHints"]["proxyHeaders"]["request"]["Cookie"] = "modalVisited=true"
+                            except:
+                                pass
                     except:
                         pass               
                 scrape_ = streams_list
