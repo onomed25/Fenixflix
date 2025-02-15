@@ -173,7 +173,7 @@ def stream(type: str, id: str, request: Request):
             scrape_ = [{
                 "url": stream_,
                 "name": "SKYFLIX",
-                "description": "Netcine",
+                "description": "NTC Server",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
