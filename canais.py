@@ -2202,6 +2202,7 @@ def canais_list(server):
     },
     {
         'id': 'skyflix:combate',
+        "rc": {"token": "c0hIM0JOamNVVk1lR2poQzJsTm00VFBP", "channel": "combate"},
         'type': 'tv',
         'name': 'COMBATE',
         'poster': f"{server}https://embehub.com/img/thumb-combate.jpg",
@@ -2210,14 +2211,15 @@ def canais_list(server):
         'genres': ['Esportes'],
         'streams': [
             {
-                "url": "https://play.embehub.com/COMBATE/index.fmp4.m3u8",
+                "url": "",
                 "title": "COMBATE",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/COMBATE/embed.html"
+                            "Origin": "https://redecanaistv.ps",
+                            "Referer": "https://redecanaistv.ps/"
                         }
                     }
                 }
