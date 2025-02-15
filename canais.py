@@ -4790,7 +4790,9 @@ def get_rc(channel,token):
         data = {'rctoken': token}
         r = requests.post(page,headers=headers,cookies=cookie,data=data,timeout=6)
         if r.status_code == 200:
-            stream = re.findall(r'src:\s*"(.*?)"', r.text)[-1]
+            #stream = re.findall(r'src:\s*"(.*?)"', src)[-1]
+            pattern = r'const CHROMECAST_URL = "(.*?)";'
+            stream = re.findall(pattern, r.text)[-1]
             if stream.startswith('//'):
                 stream = 'https:' + stream
             # fix stream
@@ -4803,4 +4805,4 @@ def get_rc(channel,token):
 
 
 
-# print(get_rc('bobosp', 'c0hIM0JOdmVXVk1VRmpoRDJseHI4emM9'))
+##print(get_rc('bobosp', 'c0hIM0JOdmVXVk1VRmpoRDJseHI4emM9'))
