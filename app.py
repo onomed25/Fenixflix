@@ -1,7 +1,9 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
 from jinja2 import Environment, FileSystemLoader
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 import logging
 from netcine import catalog_search, search_link
 import requests
@@ -10,6 +12,9 @@ import os
 from urllib.parse import quote_plus, quote
 
 templates = Environment(loader=FileSystemLoader("templates"))
+limiter = Limiter(key_func=get_remote_address)
+rate_limit = '3/second'
+
 app = FastAPI()
 
 
@@ -18,6 +23,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 VERSION = "1.0.0"
 logger.info(f"Versão da aplicação: {VERSION}")
+
+
 
 MANIFEST = {
     "id": "com.skyflix",
@@ -66,6 +73,10 @@ MANIFEST = {
     "idPrefixes": ["skyflix", "tt"]
 }
 
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request, exc):
+    return JSONResponse(content={"error": "Too many requests"}, status_code=429)
+
 def add_cors(response: Response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
@@ -74,6 +85,7 @@ def add_cors(response: Response):
     return response
 
 @app.get("/", response_class=HTMLResponse)
+@limiter.limit(rate_limit)
 async def home(request: Request):
     template = templates.get_template("index.html")
     response = HTMLResponse(template.render(
@@ -99,28 +111,33 @@ def proxy_logo(url: str):
         return add_cors(JSONResponse(content={"error": f"Erro ao buscar a imagem: {str(e)}"}, status_code=500))
 
 @app.get("/manifest.json")
-def manifest():
+@limiter.limit(rate_limit)
+def manifest(request: Request):
     return add_cors(JSONResponse(content=MANIFEST))
 
 @app.get("/catalog/tv/skyflix/genre={id}.json")
+@limiter.limit(rate_limit)
 def genres(id: str, request: Request):
     server = f"https://{request.url.hostname}/logo?url="
     canais_ = [canal for canal in canais.canais_list(server) if id in canal["genres"]]
     return add_cors(JSONResponse(content={"metas": canais_}))
 
 @app.get("/catalog/{type}/{id}.json")
+@limiter.limit(rate_limit)
 def catalog_route(type: str, id: str, request: Request):
     server = f"https://{request.url.hostname}/logo?url="
     canais_ = [canal for canal in canais.canais_list(server)] if type == "tv" else []
     return add_cors(JSONResponse(content={"metas": canais_}))
 
 @app.get("/catalog/{type}/skyflix/search={query}.json")
-def search(type: str, query: str):
+@limiter.limit(rate_limit)
+def search(type: str, query: str, request: Request):
     catalog = catalog_search(query)
     results = [item for item in catalog if item.get("type") == type] if catalog else []
     return add_cors(JSONResponse(content={"metas": results}))
 
 @app.get("/meta/{type}/{id}.json")
+@limiter.limit(rate_limit)
 def meta(type: str, id: str, request: Request):
     server = f"https://{request.url.hostname}/logo?url="
     meta_data = next((canal for canal in canais.canais_list(server) if canal["id"] == id), {}) if type == "tv" else {}
@@ -129,6 +146,7 @@ def meta(type: str, id: str, request: Request):
     return add_cors(JSONResponse(content={"meta": meta_data}))
 
 @app.get("/stream/{type}/{id}.json")
+@limiter.limit(rate_limit)
 def stream(type: str, id: str, request: Request):
     server = f"https://{request.url.hostname}/logo?url="
     if type == "tv":
@@ -174,5 +192,6 @@ def stream(type: str, id: str, request: Request):
     return add_cors(JSONResponse(content={"streams": scrape_}))
 
 @app.options("/{path:path}")
-def options_handler(path: str):
+@limiter.limit(rate_limit)
+def options_handler(path: str, request: Request):
     return add_cors(Response(status_code=204))
