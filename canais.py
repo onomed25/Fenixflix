@@ -8,7 +8,6 @@ def canais_list(server):
     canais = [
     {
         "id": "skyflix:globosp",
-        "rc": {"token": "c0hIM0JOdmVXVk1VRmpoRDJseHI4emM9", "channel": "bobosp"},
         "type": "tv",
         "name": "Globo SP",
         "poster": f"{server}https://embehub.com/img/globo.png",
@@ -17,15 +16,15 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "",
+                "url": "https://anonstream.zip/globosp-globosaopaulo/index.m3u8",
                 "title": "Globo SP",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -33,8 +32,7 @@ def canais_list(server):
         ]
     },
     {
-        "id": "skyflix:globonordeste",
-        "rc": {"token": "c0hIM0JOdmVVRmNZRkRoRDJseHI3aWpaZzloZ0Z6UT0=", "channel": "bobonordeste"},        
+        "id": "skyflix:globonordeste",    
         "type": "tv",
         "name": "Globo Nordeste",
         "poster": f"{server}https://embehub.com/img/globo.png",
@@ -43,15 +41,15 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "",
+                "url": "https://anonstream.zip/globope-globonordeste/index.m3u8",
                 "title": "Globo Nordeste",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -59,8 +57,7 @@ def canais_list(server):
         ]
     },
     {
-        "id": "skyflix:sbtsp",
-        "rc": {"token": "c0hIM0JOclVXVlljRWpoUzEwbz0=", "channel": "sbt"},  
+        "id": "skyflix:sbtsp", 
         "type": "tv",
         "name": "SBT SP",
         "poster": f"{server}https://embehub.com/img/thumb-sbt.jpg",
@@ -69,15 +66,15 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/sbtsp/video.m3u8",
+                "url": "https://cdn.live.br1.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
                 "title": "SBT SP",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedmax.site",
+                            "Referer": "https://embedmax.site/"
                         }
                     }
                 }
@@ -85,8 +82,7 @@ def canais_list(server):
         ]
     },
     {
-        "id": "skyflix:bandsp",
-        "rc": {"token": "c0hIM0JOdmRWRmNZRmpoRDFGQmc=", "channel": "band"},         
+        "id": "skyflix:bandsp",       
         "type": "tv",
         "name": "BAND SP",
         "poster": f"{server}https://embehub.com/img/thumb-band.jpg",
@@ -95,15 +91,15 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/bandsp/video.m3u8",
+                "url": "https://cdn.live.br1.jmvstream.com/w/LVW-15748/LVW15748_Yed7yzLuRC/chunklist.m3u8",
                 "title": "BAND SP",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedmax.site",
+                            "Referer": "https://embedmax.site/"
                         }
                     }
                 }
@@ -146,14 +142,15 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://play.embehub.com/TVBRASIL/index.fmp4.m3u8",
+                "url": "https://tvbrasil-stream.ebc.com.br/EBC_HD-avc1_900000=10003.m3u8",
                 "title": "TV BRASIL",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Referer": "https://play.embehub.com/TVBRASIL/embed.html"
+                            "Origin": "https://embedmax.site",
+                            "Referer": "https://embedmax.site/"
                         }
                     }
                 }
@@ -1665,7 +1662,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:bandsports",
-        "rc": {"token": "c0hIM0JOdmNXRmNiRmpoRDFGQmc4emZFbGNsZw==", "channel": "bandsports"}, 
         "type": "tv",
         "name": "BANDSPORTS",
         "poster": f"{server}https://embehub.com/img/thumb-bandsports.jpg",
@@ -1674,15 +1670,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://anonstream.zip/bandsports/index.m3u8",
                 "title": "BANDSPORTS",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1691,7 +1687,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:espn",
-        "rc": {"token": "c0hIM0JOdmZVbFViRURoRXhrNXE=", "channel": "espn"}, 
         "type": "tv",
         "name": "ESPN",
         "poster": f"{server}https://embehub.com/img/thumb-espn.jpg",
@@ -1700,15 +1695,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://super-cdn.link/espn/index.m3u8",
                 "title": "ESPN",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1717,7 +1712,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:espn2",
-        "rc": {"token": "c0hIM0JOdmZVbG9iRWpoRXhrNXFzZz09", "channel": "espn2"}, 
         "type": "tv",
         "name": "ESPN 2",
         "poster": f"{server}https://embehub.com/img/thumb-espn2.jpg",
@@ -1726,15 +1720,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://super-cdn.link/espn2/index.m3u8",
                 "title": "ESPN 2",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1743,7 +1737,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:espn3",
-        "rc": {"token": "c0hIM0JOdmNVbG9jRkRoRXhrNXFzdz09", "channel": "espn3"},
         "type": "tv",
         "name": "ESPN 3",
         "poster": f"{server}https://embehub.com/img/thumb-espn3.jpg",
@@ -1752,15 +1745,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://super-cdn.link/espn3/index.m3u8",
                 "title": "ESPN 3",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1769,7 +1762,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:espn4",
-        "rc": {"token": "c0hIM0JOdmNWbG9lRWpoRXhrNXF0QT09", "channel": "espn4"},
         "type": "tv",
         "name": "ESPN 4",
         "poster": f"{server}https://embehub.com/img/thumb-espn4.jpg",
@@ -1778,15 +1770,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://super-cdn.link/espn4/index.m3u8",
                 "title": "ESPN 4",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1795,7 +1787,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:espn5",
-        "rc": {"token": "c0hIM0JOdmNWMUFaRXpoRXhrNXF0UT09", "channel": "espn5"},
         "type": "tv",
         "name": "ESPN 5",
         "poster": f"{server}https://embehub.com/img/thumb-espn5.jpg",
@@ -1804,15 +1795,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://play.embehub.com/ESPN5/index.fmp4.m3u8",
+                "url": "https://super-cdn.link/espn5/index.m3u8",
                 "title": "ESPN 5",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1821,7 +1812,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:espn6",
-        "rc": {"token": "c0hIM0JOdmNVVlFlR2poRXhrNXF0Zz09", "channel": "espn6"},
         "type": "tv",
         "name": "ESPN 6",
         "poster": f"{server}https://embehub.com/img/thumb-espn6.jpg",
@@ -1830,15 +1820,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://play.embehub.com/ESPN6/index.fmp4.m3u8",
+                "url": "https://super-cdn.link/espn6/index.m3u8",
                 "title": "ESPN 6",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1873,7 +1863,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:sportv2",
-        "rc": {"token": "c0hIM0JOdmZVVkVhRWpoU3hWRjI5REda", "channel": "sportv2"},
         "type": "tv",
         "name": "SPORTV 2",
         "poster": f"{server}https://embehub.com/img/thumb-sportv2.jpg",
@@ -1882,15 +1871,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://play.embehub.com/SPORTTV2/index.fmp4.m3u8",
+                "url": "https://d1wwtskvr1r98k.cloudfront.net/out/v1/208c57f14bb24c4484c0c4caeaab20e3/index.mpd",
                 "title": "SPORTV 2",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1899,7 +1888,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:sportv3",
-        "rc": {"token": "c0hIM0JOdmNXRnNaRVRoU3hWRjI5REdZ", "channel": "sportv3"},
         "type": "tv",
         "name": "SPORTV 3",
         "poster": f"{server}https://embehub.com/img/thumb-sportv3.jpg",
@@ -1908,15 +1896,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://play.embehub.com/SPORTTV3/index.fmp4.m3u8",
+                "url": "https://d31ii3fk8fd7mh.cloudfront.net/out/v1/21ff683173064914834b140be21515bd/index.mpd",
                 "title": "SPORTV 3",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -1925,7 +1913,6 @@ def canais_list(server):
     },
     {
         "id": "skyflix:premiereclubes",
-        "rc": {"token": "c0hIM0JOdmRWRlFWRlRoUngxdHA2U0xaZ3Q1L0ZqUDdLdz09", "channel": "premiereclubes"},
         "type": "tv",
         "name": "PREMIERE CLUBES",
         "poster": f"{server}https://embehub.com/img/thumb-premiereclubes.jpg",
@@ -1934,15 +1921,15 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "",
+                "url": "https://d31ii3fk8fd7mh.cloudfront.net/out/v1/bebecfdb88004eca85a0791218dac6f0/index.mpd",
                 "title": "PREMIERE CLUBES",
                 "behaviorHints": {
                     "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-                            "Origin": "https://redecanaistv.ps",
-                            "Referer": "https://redecanaistv.ps/"
+                            "Origin": "https://embedstream.org",
+                            "Referer": "https://embedstream.org/"
                         }
                     }
                 }
@@ -4802,7 +4789,6 @@ def get_rc(channel,token):
     except:
         pass
     return stream
-
 
 
 ##print(get_rc('bobosp', 'c0hIM0JOdmVXVk1VRmpoRDJseHI4emM9'))
