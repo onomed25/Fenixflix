@@ -149,6 +149,54 @@ def opcoes_filmes(url,headers, host):
         return legendado[-1]
     else:
         return ''
+    
+def check_item(search,headers,year_imdb,text):
+    r = requests.get(search,headers=headers)
+    src = r.text
+    soup = BeautifulSoup(src,'html.parser')
+    box = soup.find("div", {"id": "box_movies"})
+    movies = box.findAll("div", {"class": "movie"})
+    count = 0
+    for i in movies:
+        try:
+            year = i.find('span', {'class': 'year'}).text
+            year = year.replace('–', '')
+        except:
+            year = ''
+        name = i.find('h2').text
+        try:
+            name = name.decode('utf-8')
+        except:
+            pass
+        try:
+            name = name.decode()
+        except:
+            pass           
+        if ':' in text:
+            text_search = text.split(':')[1]
+            text_search = text_search.replace(' ', '')
+            text_search = text_search.lower()
+            name_search = name.replace(' ', '')
+            name_search = name_search.lower()
+            if text_search in name_search:
+                count += 1
+                break
+        else:
+            if str(year_imdb) in str(year):
+                count += 1
+                break
+            elif str(int(year_imdb) + 1) in str(year):
+                count += 1         
+                break
+            elif str(int(year_imdb) - 1) in str(year):
+                count += 1
+                break
+    if count > 0:
+        return movies
+    else:
+        return []        
+        
+
 
 
 def scrape_search(host,headers,text,alternate,year_imdb,type):
@@ -171,14 +219,26 @@ def scrape_search(host,headers,text,alternate,year_imdb,type):
         if search_count > 2 and ':' in text:
             search_ = text.split(': ')[1]
     except:
-        pass    
+        pass   
     url_search = new_host + '?s=' + quote_plus(search_)
     headers.update({'Cookie': 'XCRF%3DXCRF'})
-    r = requests.get(url_search,headers=headers)
-    src = r.text
-    soup = BeautifulSoup(src,'html.parser')
-    box = soup.find("div", {"id": "box_movies"})
-    movies = box.findAll("div", {"class": "movie"})
+    m1 = check_item(url_search,headers,year_imdb,text)
+    if m1:
+        movies = m1
+    else:
+        try:
+            if ':' in text:
+                param_search = text.split(':')[1]
+                url_search2 = new_host + '?s=' + quote_plus(param_search)
+                m2 = check_item(url_search2,headers,year_imdb,text)
+                if m2:
+                    movies = m2
+                else:
+                    movies = []
+            else:
+                movies = []
+        except:
+            movies = []
     for i in movies:
         name = i.find('h2').text
         try:
@@ -276,6 +336,10 @@ def scrape_search(host,headers,text,alternate,year_imdb,type):
         else:
             name6 = name
         try:
+            count_text2 = len(text.split(' '))
+        except:
+            count_text2 = 0
+        try:
             img = i.find('div', {'class': 'imagen'})
             link = img.find('a').get('href', '')
         except:
@@ -297,6 +361,10 @@ def scrape_search(host,headers,text,alternate,year_imdb,type):
                 return link, new_host
             elif textalternate in name and str(year_imdb) in str(year) or textalternate2 in name4 and str(year_imdb) in str(year):
                 return link, new_host
+            elif text in name and str(int(year_imdb) + 1) in str(year) and count_text2 > 0:
+                return link, new_host
+            elif text in name and str(int(year_imdb) -1) in str(year) and count_text2 > 0:
+                return link, new_host              
         elif type == 'movies' and not '/tvshows/' in link: 
             if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
                 return link, new_host
@@ -313,7 +381,11 @@ def scrape_search(host,headers,text,alternate,year_imdb,type):
             elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:                   
                 return link, new_host
             elif textalternate in name and str(year_imdb) in str(year) or textalternate2 in name4 and str(year_imdb) in str(year):
-                return link, new_host                                                 
+                return link, new_host
+            elif text in name and str(int(year_imdb) + 1) in str(year) and count_text2 > 0:
+                return link, new_host
+            elif text in name and str(int(year_imdb) -1) in str(year) and count_text2 > 0:
+                return link, new_host                                                            
     return '', ''   
 
 
@@ -365,6 +437,8 @@ def search_link(id):
     except:
         pass
     return stream, headers_ 
+
+
 
 
 
