@@ -98,7 +98,7 @@ async def home(request: Request):
     return add_cors(response)
 
 @app.get("/logo")
-def proxy_logo(url: str):
+async def proxy_logo(url: str):
     if not url:
         return add_cors(JSONResponse(content={"error": "Nenhuma URL fornecida"}, status_code=400))
     try:
@@ -112,33 +112,33 @@ def proxy_logo(url: str):
 
 @app.get("/manifest.json")
 @limiter.limit(rate_limit)
-def manifest(request: Request):
+async def manifest(request: Request):
     return add_cors(JSONResponse(content=MANIFEST))
 
 @app.get("/catalog/tv/skyflix/genre={id}.json")
 @limiter.limit(rate_limit)
-def genres(id: str, request: Request):
+async def genres(id: str, request: Request):
     server = f"https://{request.url.hostname}/logo?url="
     canais_ = [canal for canal in canais.canais_list(server) if id in canal["genres"]]
     return add_cors(JSONResponse(content={"metas": canais_}))
 
 @app.get("/catalog/{type}/{id}.json")
 @limiter.limit(rate_limit)
-def catalog_route(type: str, id: str, request: Request):
+async def catalog_route(type: str, id: str, request: Request):
     server = f"https://{request.url.hostname}/logo?url="
     canais_ = [canal for canal in canais.canais_list(server)] if type == "tv" else []
     return add_cors(JSONResponse(content={"metas": canais_}))
 
 @app.get("/catalog/{type}/skyflix/search={query}.json")
 @limiter.limit(rate_limit)
-def search(type: str, query: str, request: Request):
+async def search(type: str, query: str, request: Request):
     catalog = catalog_search(query)
     results = [item for item in catalog if item.get("type") == type] if catalog else []
     return add_cors(JSONResponse(content={"metas": results}))
 
 @app.get("/meta/{type}/{id}.json")
 @limiter.limit(rate_limit)
-def meta(type: str, id: str, request: Request):
+async def meta(type: str, id: str, request: Request):
     server = f"https://{request.url.hostname}/logo?url="
     meta_data = next((canal for canal in canais.canais_list(server) if canal["id"] == id), {}) if type == "tv" else {}
     if meta_data:
@@ -147,7 +147,7 @@ def meta(type: str, id: str, request: Request):
 
 @app.get("/stream/{type}/{id}.json")
 @limiter.limit(rate_limit)
-def stream(type: str, id: str, request: Request):
+async def stream(type: str, id: str, request: Request):
     server = f"https://{request.url.hostname}/logo?url="
     if type == "tv":
         scrape_ = []
@@ -197,5 +197,5 @@ def stream(type: str, id: str, request: Request):
 
 @app.options("/{path:path}")
 @limiter.limit(rate_limit)
-def options_handler(path: str, request: Request):
+async def options_handler(path: str, request: Request):
     return add_cors(Response(status_code=204))
