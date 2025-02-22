@@ -179,45 +179,45 @@ async def stream(type: str, id: str, request: Request):
                 scrape_ = streams_list
                 break
     elif type in ["movie", "series"]:
-        try:
-            ip_host = get_external_ip()
-        except:
-            ip_host = ''
+        # try:
+        #     ip_host = get_external_ip()
+        # except:
+        #     ip_host = ''
         try:
             stream_, headers = search_link(id)
-            if ip_host:
-                scrape_ = [{
-                    "url": stream_,
-                    "name": "SKYFLIX",
-                    "description": "NTC Server",
-                    "behaviorHints": {
-                        "notWebReady": True,
-                        "proxyHeaders": {
-                            "request": {
-                                "User-Agent": headers["User-Agent"],
-                                "Referer": headers["Referer"],
-                                "Cookie": headers["Cookie"],
-                                "X-Forwarded-For": ip_host
-                            }
+            # if ip_host:
+            #     scrape_ = [{
+            #         "url": stream_,
+            #         "name": "SKYFLIX",
+            #         "description": "NTC Server",
+            #         "behaviorHints": {
+            #             "notWebReady": True,
+            #             "proxyHeaders": {
+            #                 "request": {
+            #                     "User-Agent": headers["User-Agent"],
+            #                     "Referer": headers["Referer"],
+            #                     "Cookie": headers["Cookie"],
+            #                     "X-Forwarded-For": ip_host
+            #                 }
+            #             }
+            #         }
+            #     }]
+            # else:               
+            scrape_ = [{
+                "url": stream_,
+                "name": "SKYFLIX",
+                "description": "NTC Server",
+                "behaviorHints": {
+                    "notWebReady": True,
+                    "proxyHeaders": {
+                        "request": {
+                            "User-Agent": headers["User-Agent"],
+                            "Referer": headers["Referer"],
+                            "Cookie": headers["Cookie"]
                         }
                     }
-                }]
-            else:               
-                scrape_ = [{
-                    "url": stream_,
-                    "name": "SKYFLIX",
-                    "description": "NTC Server",
-                    "behaviorHints": {
-                        "notWebReady": True,
-                        "proxyHeaders": {
-                            "request": {
-                                "User-Agent": headers["User-Agent"],
-                                "Referer": headers["Referer"],
-                                "Cookie": headers["Cookie"]
-                            }
-                        }
-                    }
-                }]
+                }
+            }]
         except:
             scrape_ = []
     else:
