@@ -73,6 +73,13 @@ MANIFEST = {
     "idPrefixes": ["skyflix", "tt"]
 }
 
+def get_external_ip():
+    try:
+        response = requests.get("https://api64.ipify.org?format=json")
+        return response.json().get("ip")
+    except requests.RequestException:
+        return None
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request, exc):
     return JSONResponse(content={"error": "Too many requests"}, status_code=429)
@@ -173,22 +180,44 @@ async def stream(type: str, id: str, request: Request):
                 break
     elif type in ["movie", "series"]:
         try:
+            ip_host = get_external_ip()
+        except:
+            ip_host = ''
+        try:
             stream_, headers = search_link(id)
-            scrape_ = [{
-                "url": stream_,
-                "name": "SKYFLIX",
-                "description": "NTC Server",
-                "behaviorHints": {
-                    "notWebReady": True,
-                    "proxyHeaders": {
-                        "request": {
-                            "User-Agent": headers["User-Agent"],
-                            "Referer": headers["Referer"],
-                            "Cookie": headers["Cookie"]
+            if ip_host:
+                scrape_ = [{
+                    "url": stream_,
+                    "name": "SKYFLIX",
+                    "description": "NTC Server",
+                    "behaviorHints": {
+                        "notWebReady": True,
+                        "proxyHeaders": {
+                            "request": {
+                                "User-Agent": headers["User-Agent"],
+                                "Referer": headers["Referer"],
+                                "Cookie": headers["Cookie"],
+                                "X-Forwarded-For": ip_host
+                            }
                         }
                     }
-                }
-            }]
+                }]
+            else:               
+                scrape_ = [{
+                    "url": stream_,
+                    "name": "SKYFLIX",
+                    "description": "NTC Server",
+                    "behaviorHints": {
+                        "notWebReady": True,
+                        "proxyHeaders": {
+                            "request": {
+                                "User-Agent": headers["User-Agent"],
+                                "Referer": headers["Referer"],
+                                "Cookie": headers["Cookie"]
+                            }
+                        }
+                    }
+                }]
         except:
             scrape_ = []
     else:
