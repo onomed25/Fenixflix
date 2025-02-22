@@ -65,10 +65,14 @@ def resolve_stream(url):
                 baixo.append(match)  
         if alto:
             stream = alto[-1]
-            stream = stream.replace(' ', '')
+            if ' ' in stream:
+                stream = ''
+            #stream = stream.replace(' ', '')
         elif baixo:
             stream = baixo[-1]
-            stream = stream.replace(' ', '')        
+            if ' ' in stream:
+                stream = ''            
+            #stream = stream.replace(' ', '')        
     except:
         pass
     return stream, headers
