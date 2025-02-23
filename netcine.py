@@ -348,47 +348,50 @@ def scrape_search(host,headers,text,alternate,year_imdb,type):
             link = img.find('a').get('href', '')
         except:
             link = ''
+        # check count names:
+        count_name_ = len(name)
+        count_text_ = len(text)
         if type == 'tvshows' and '/tvshows/' in link:
             if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
                 return link, new_host
             elif text2 in name3 and str(year_imdb) in str(year):
                 return link, new_host 
-            elif text2 in name3 and str(int(year_imdb) + 1) in str(year) and count_text > 1:        
+            elif text2 in name3 and str(int(year_imdb) + 1) in str(year) and count_text > 1 and not count_name_ > count_text_:     
                 return link, new_host
-            elif text2 in name3 and str(int(year_imdb) - 1) in str(year) and count_text > 1:        
+            elif text2 in name3 and str(int(year_imdb) - 1) in str(year) and count_text > 1 and not count_name_ > count_text_:    
                 return link, new_host
             elif text3 in name4 and str(year_imdb) in str(year) and text3 and name4:
                 return link, new_host
-            elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:                   
+            elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:               
                 return link, new_host
-            elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:                   
+            elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:              
                 return link, new_host
             elif textalternate in name and str(year_imdb) in str(year) or textalternate2 in name4 and str(year_imdb) in str(year):
                 return link, new_host
-            elif text in name and str(int(year_imdb) + 1) in str(year) and count_text2 > 0:
+            elif text in name and str(int(year_imdb) + 1) in str(year) and count_text2 > 0 and not count_name_ > count_text_:
                 return link, new_host
-            elif text in name and str(int(year_imdb) -1) in str(year) and count_text2 > 0:
+            elif text in name and str(int(year_imdb) -1) in str(year) and count_text2 > 0 and not count_name_ > count_text_:
                 return link, new_host              
         elif type == 'movies' and not '/tvshows/' in link: 
             if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
                 return link, new_host
             elif text2 in name3 and str(year_imdb) in str(year):
                 return link, new_host 
-            elif text2 in name3 and str(int(year_imdb) + 1) in str(year) and count_text > 1:        
+            elif text2 in name3 and str(int(year_imdb) + 1) in str(year) and count_text > 1 and not count_name_ > count_text_:     
                 return link, new_host
-            elif text2 in name3 and str(int(year_imdb) - 1) in str(year) and count_text > 1:        
+            elif text2 in name3 and str(int(year_imdb) - 1) in str(year) and count_text > 1 and not count_name_ > count_text_:    
                 return link, new_host
             elif text3 in name4 and str(year_imdb) in str(year) and text3 and name4:
                 return link, new_host
-            elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:                   
+            elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:               
                 return link, new_host
-            elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:                   
+            elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:              
                 return link, new_host
             elif textalternate in name and str(year_imdb) in str(year) or textalternate2 in name4 and str(year_imdb) in str(year):
                 return link, new_host
-            elif text in name and str(int(year_imdb) + 1) in str(year) and count_text2 > 0:
+            elif text in name and str(int(year_imdb) + 1) in str(year) and count_text2 > 0 and not count_name_ > count_text_:
                 return link, new_host
-            elif text in name and str(int(year_imdb) -1) in str(year) and count_text2 > 0:
+            elif text in name and str(int(year_imdb) -1) in str(year) and count_text2 > 0 and not count_name_ > count_text_:
                 return link, new_host                                                            
     return '', ''   
 
@@ -441,8 +444,5 @@ def search_link(id):
     except:
         pass
     return stream, headers_ 
-
-
-
 
 
