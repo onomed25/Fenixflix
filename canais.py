@@ -16,7 +16,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/globosp/video.m3u8",
+                "url": "https://embedcanaistv.live/globosp/video.m3u8",
                 "title": "Globo SP",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -41,7 +41,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/globoba/video.m3u8",
+                "url": "https://embedcanaistv.live/globoba/video.m3u8",
                 "title": "Globo BA",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -66,7 +66,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/sbtsp/video.m3u8",
+                "url": "https://embedcanaistv.live/sbtsp/video.m3u8",
                 "title": "SBT SP",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -91,7 +91,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/bandsp/video.m3u8",
+                "url": "https://embedcanaistv.live/bandsp/video.m3u8",
                 "title": "BAND SP",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -116,7 +116,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/redetv/video.m3u8",
+                "url": "https://embedcanaistv.live/redetv/video.m3u8",
                 "title": "REDE TV",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -190,7 +190,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/recordsp/video.m3u8",
+                "url": "https://embedcanaistv.live/recordsp/video.m3u8",
                 "title": "RECORD SP",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -267,7 +267,7 @@ def canais_list(server):
         "genres": ["Variedades"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/gnt/video.m3u8",
+                "url": "https://embedcanaistv.live/gnt/video.m3u8",
                 "title": "GNT",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -292,7 +292,7 @@ def canais_list(server):
         "genres": ["Variedades"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/multishow/video.m3u8",
+                "url": "https://embedcanaistv.live/multishow/video.m3u8",
                 "title": "MULTISHOW",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -343,7 +343,7 @@ def canais_list(server):
         "genres": ["Variedades"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/adultswim/video.m3u8",
+                "url": "https://embedcanaistv.live/adultswim/video.m3u8",
                 "title": "MULTISHOW",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -368,7 +368,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/amc/video.m3u8",
+                "url": "https://embedcanaistv.live/amc/video.m3u8",
                 "title": "AMC",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -393,7 +393,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/animalplanet/video.m3u8",
+                "url": "https://embedcanaistv.live/animalplanet/video.m3u8",
                 "title": "ANIMAL PLANET",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -444,7 +444,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/axn/video.m3u8",
+                "url": "https://embedcanaistv.live/axn/video.m3u8",
                 "title": "AXN",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -495,7 +495,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/discoverychannel/video.m3u8",
+                "url": "https://embedcanaistv.live/discoverychannel/video.m3u8",
                 "title": "DISCOVERY CHANNEL",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -520,7 +520,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/discoveryhh/video.m3u8",
+                "url": "https://embedcanaistv.live/discoveryhh/video.m3u8",
                 "title": "DISCOVERY HOME & HEALTH",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -597,7 +597,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/discoveryworld/video.m3u8",
+                "url": "https://embedcanaistv.live/discoveryworld/video.m3u8",
                 "title": "DISCOVERY WORLD",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -622,7 +622,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/discoveryscience/video.m3u8",
+                "url": "https://embedcanaistv.live/discoveryscience/video.m3u8",
                 "title": "DISCOVERY SCIENCE",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -647,7 +647,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/fx/video.m3u8",
+                "url": "https://embedcanaistv.live/fx/video.m3u8",
                 "title": "FX",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -672,7 +672,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/hbo/video.m3u8",
+                "url": "https://embedcanaistv.live/hbo/video.m3u8",
                 "title": "HBO",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -697,7 +697,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/hbo2/video.m3u8",
+                "url": "https://embedcanaistv.live/hbo2/video.m3u8",
                 "title": "HBO 2",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -722,7 +722,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/hbofamily/video.m3u8",
+                "url": "https://embedcanaistv.live/hbofamily/video.m3u8",
                 "title": "HBO FAMILY",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -747,7 +747,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/hboplus/video.m3u8",
+                "url": "https://embedcanaistv.live/hboplus/video.m3u8",
                 "title": "HBO PLUS",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -772,7 +772,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/hboxtreme/video.m3u8",
+                'url': "https://embedcanaistv.live/hboxtreme/video.m3u8",
                 'title': "HBO XTREME",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -797,7 +797,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/hbosignature/video.m3u8",
+                'url': "https://embedcanaistv.live/hbosignature/video.m3u8",
                 'title': "HBO SIGNATURE",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -822,7 +822,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/hbopop/video.m3u8",
+                'url': "https://embedcanaistv.live/hbopop/video.m3u8",
                 'title': "HBO POP",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -847,7 +847,7 @@ def canais_list(server):
         'genres': ['Documentarios'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/history/video.m3u8",
+                'url': "https://embedcanaistv.live/history/video.m3u8",
                 'title': "HISTORY",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -872,7 +872,7 @@ def canais_list(server):
         'genres': ['Documentarios'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/history2/video.m3u8",
+                'url': "https://embedcanaistv.live/history2/video.m3u8",
                 'title': "HISTORY 2",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -897,7 +897,7 @@ def canais_list(server):
         'genres': ['Variedades'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/mtv/video.m3u8",
+                'url': "https://embedcanaistv.live/mtv/video.m3u8",
                 'title': "MTV",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -974,7 +974,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/space/video.m3u8",
+                'url': "https://embedcanaistv.live/space/video.m3u8",
                 'title': "SPACE",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -999,7 +999,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/tnt/video.m3u8",
+                'url': "https://embedcanaistv.live/tnt/video.m3u8",
                 'title': "TNT",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1024,7 +1024,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/tntseries/video.m3u8",
+                'url': "https://embedcanaistv.live/tntseries/video.m3u8",
                 'title': "TNT SERIES",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1049,7 +1049,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/tntnovelas/video.m3u8",
+                'url': "https://embedcanaistv.live/tntnovelas/video.m3u8",
                 'title': "TNT NOVELAS",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1074,7 +1074,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/tcaction/video.m3u8",
+                'url': "https://embedcanaistv.live/tcaction/video.m3u8",
                 'title': "TELECINE ACTION",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1099,7 +1099,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/tccult/video.m3u8",
+                'url': "https://embedcanaistv.live/tccult/video.m3u8",
                 'title': "TELECINE CULT",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1124,7 +1124,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/tcfun/video.m3u8",
+                'url': "https://embedcanaistv.live/tcfun/video.m3u8",
                 'title': "TELECINE FUN",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1149,7 +1149,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/tcpipoca/video.m3u8",
+                'url': "https://embedcanaistv.live/tcpipoca/video.m3u8",
                 'title': "TELECINE PIPOCA",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1174,7 +1174,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/tcpremium/video.m3u8",
+                'url': "https://embedcanaistv.live/tcpremium/video.m3u8",
                 'title': "TELECINE PREMIUM",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1199,7 +1199,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/tctouch/video.m3u8",
+                'url': "https://embedcanaistv.live/tctouch/video.m3u8",
                 'title': "TELECINE TOUCH",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1224,7 +1224,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/universaltv/video.m3u8",
+                'url': "https://embedcanaistv.live/universaltv/video.m3u8",
                 'title': "UNIVERSAL TV",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1273,7 +1273,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedcanaistv.site/cinemax/video.m3u8",
+                'url': "https://embedcanaistv.live/cinemax/video.m3u8",
                 'title': "CINEMAX",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1324,7 +1324,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/sonychannel/video.m3u8",
+                "url": "https://embedcanaistv.live/sonychannel/video.m3u8",
                 "title": "SONY CHANNEL",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1375,7 +1375,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/starchannel/video.m3u8",
+                "url": "https://embedcanaistv.live/starchannel/video.m3u8",
                 "title": "STAR CHANNEL",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1400,7 +1400,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/warner/video.m3u8",
+                "url": "https://embedcanaistv.live/warner/video.m3u8",
                 "title": "WARNER TV",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1425,7 +1425,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/aee/video.m3u8",
+                "url": "https://embedcanaistv.live/aee/video.m3u8",
                 "title": "A&E",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1450,7 +1450,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/discoveryid/video.m3u8",
+                "url": "https://embedcanaistv.live/discoveryid/video.m3u8",
                 "title": "INVESTIGAÇÃO DISCOVERY",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1501,7 +1501,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/megapix/video.m3u8",
+                "url": "https://embedcanaistv.live/megapix/video.m3u8",
                 "title": "MEGAPIX",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1526,7 +1526,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/studiouniversal/video.m3u8",
+                "url": "https://embedcanaistv.live/studiouniversal/video.m3u8",
                 "title": "STUDIO UNIVERSAL",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1551,7 +1551,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/lifetime/video.m3u8",
+                "url": "https://embedcanaistv.live/lifetime/video.m3u8",
                 "title": "LIFETIME",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1628,7 +1628,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/amazonprimevideo/video.m3u8",
+                "url": "https://embedcanaistv.live/amazonprimevideo/video.m3u8",
                 "title": "AMAZON PRIME",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1653,7 +1653,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/bandsports/video.m3u8",
+                "url": "https://embedcanaistv.live/bandsports/video.m3u8",
                 "title": "BANDSPORTS",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1678,7 +1678,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/espn/video.m3u8",
+                "url": "https://embedcanaistv.live/espn/video.m3u8",
                 "title": "ESPN",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1703,7 +1703,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/espn2/video.m3u8",
+                "url": "https://embedcanaistv.live/espn2/video.m3u8",
                 "title": "ESPN 2",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1728,7 +1728,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/espn3/video.m3u8",
+                "url": "https://embedcanaistv.live/espn3/video.m3u8",
                 "title": "ESPN 3",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1753,7 +1753,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/espn4/video.m3u8",
+                "url": "https://embedcanaistv.live/espn4/video.m3u8",
                 "title": "ESPN 4",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1778,7 +1778,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/espn5/video.m3u8",
+                "url": "https://embedcanaistv.live/espn5/video.m3u8",
                 "title": "ESPN 5",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1803,7 +1803,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/espn6/video.m3u8",
+                "url": "https://embedcanaistv.live/espn6/video.m3u8",
                 "title": "ESPN 6",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1828,7 +1828,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/sportv/video.m3u8",
+                "url": "https://embedcanaistv.live/sportv/video.m3u8",
                 "title": "SPORTV",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1853,7 +1853,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/sportv2/video.m3u8",
+                "url": "https://embedcanaistv.live/sportv2/video.m3u8",
                 "title": "SPORTV 2",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1878,7 +1878,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/sportv3/video.m3u8",
+                "url": "https://embedcanaistv.live/sportv3/video.m3u8",
                 "title": "SPORTV 3",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1903,7 +1903,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/premiereclubes/video.m3u8",
+                "url": "https://embedcanaistv.live/premiereclubes/video.m3u8",
                 "title": "PREMIERE CLUBES",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1928,7 +1928,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/premiere2/video.m3u8",
+                "url": "https://embedcanaistv.live/premiere2/video.m3u8",
                 "title": "PREMIERE 2",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1953,7 +1953,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/premiere3/video.m3u8",
+                "url": "https://embedcanaistv.live/premiere3/video.m3u8",
                 "title": "PREMIERE 3",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1978,7 +1978,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/premiere4/video.m3u8",
+                "url": "https://embedcanaistv.live/premiere4/video.m3u8",
                 "title": "PREMIERE 4",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2003,7 +2003,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/premiere5/video.m3u8",
+                "url": "https://embedcanaistv.live/premiere5/video.m3u8",
                 "title": "PREMIERE 5",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2028,7 +2028,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/premiere6/video.m3u8",
+                "url": "https://embedcanaistv.live/premiere6/video.m3u8",
                 "title": "PREMIERE 6",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2053,7 +2053,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/premiere7/video.m3u8",
+                "url": "https://embedcanaistv.live/premiere7/video.m3u8",
                 "title": "PREMIERE 7",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2078,7 +2078,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedcanaistv.site/paramountplus/video.m3u8",
+                "url": "https://embedcanaistv.live/paramountplus/video.m3u8",
                 "title": "PARAMOUNT+",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2175,7 +2175,7 @@ def canais_list(server):
         'genres': ['Esportes'],
         'streams': [
             {
-                "url": "https://embedcanaistv.site/combate/video.m3u8",
+                "url": "https://embedcanaistv.live/combate/video.m3u8",
                 "title": "COMBATE",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2200,7 +2200,7 @@ def canais_list(server):
         'genres': ['Esportes'],
         'streams': [
             {
-                "url": "https://embedcanaistv.site/cazetv/video.m3u8",
+                "url": "https://embedcanaistv.live/cazetv/video.m3u8",
                 "title": "CAZE TV 1",
                 "behaviorHints": {
                     "notWebReady": True,
