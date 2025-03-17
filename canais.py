@@ -16,7 +16,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedtv.site/globosp/video.m3u8",
+                "url": "https://tvsmarters.org/globosp/video.m3u8",
                 "title": "Globo SP",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -41,7 +41,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedtv.site/globoba/video.m3u8",
+                "url": "https://tvsmarters.org/globoba/video.m3u8",
                 "title": "Globo BA",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -66,7 +66,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedtv.site/sbtsp/video.m3u8",
+                "url": "https://tvsmarters.org/sbtsp/video.m3u8",
                 "title": "SBT SP",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -91,7 +91,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedtv.site/bandsp/video.m3u8",
+                "url": "https://tvsmarters.org/bandsp/video.m3u8",
                 "title": "BAND SP",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -116,7 +116,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedtv.site/redetv/video.m3u8",
+                "url": "https://tvsmarters.org/redetv/video.m3u8",
                 "title": "REDE TV",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -190,7 +190,7 @@ def canais_list(server):
         "genres": ["Canais Abertos"],
         "streams": [
             {
-                "url": "https://embedtv.site/recordsp/video.m3u8",
+                "url": "https://tvsmarters.org/recordsp/video.m3u8",
                 "title": "RECORD SP",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -267,7 +267,7 @@ def canais_list(server):
         "genres": ["Variedades"],
         "streams": [
             {
-                "url": "https://embedtv.site/gnt/video.m3u8",
+                "url": "https://tvsmarters.org/gnt/video.m3u8",
                 "title": "GNT",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -292,7 +292,7 @@ def canais_list(server):
         "genres": ["Variedades"],
         "streams": [
             {
-                "url": "https://embedtv.site/multishow/video.m3u8",
+                "url": "https://tvsmarters.org/multishow/video.m3u8",
                 "title": "MULTISHOW",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -343,7 +343,7 @@ def canais_list(server):
         "genres": ["Variedades"],
         "streams": [
             {
-                "url": "https://embedtv.site/adultswim/video.m3u8",
+                "url": "https://tvsmarters.org/adultswim/video.m3u8",
                 "title": "MULTISHOW",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -368,7 +368,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/amc/video.m3u8",
+                "url": "https://tvsmarters.org/amc/video.m3u8",
                 "title": "AMC",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -393,7 +393,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedtv.site/animalplanet/video.m3u8",
+                "url": "https://tvsmarters.org/animalplanet/video.m3u8",
                 "title": "ANIMAL PLANET",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -444,7 +444,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/axn/video.m3u8",
+                "url": "https://tvsmarters.org/axn/video.m3u8",
                 "title": "AXN",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -495,7 +495,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedtv.site/discoverychannel/video.m3u8",
+                "url": "https://tvsmarters.org/discoverychannel/video.m3u8",
                 "title": "DISCOVERY CHANNEL",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -520,7 +520,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedtv.site/discoveryhh/video.m3u8",
+                "url": "https://tvsmarters.org/discoveryhh/video.m3u8",
                 "title": "DISCOVERY HOME & HEALTH",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -597,7 +597,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedtv.site/discoveryworld/video.m3u8",
+                "url": "https://tvsmarters.org/discoveryworld/video.m3u8",
                 "title": "DISCOVERY WORLD",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -622,7 +622,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedtv.site/discoveryscience/video.m3u8",
+                "url": "https://tvsmarters.org/discoveryscience/video.m3u8",
                 "title": "DISCOVERY SCIENCE",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -647,7 +647,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/fx/video.m3u8",
+                "url": "https://tvsmarters.org/fx/video.m3u8",
                 "title": "FX",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -672,7 +672,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/hbo/video.m3u8",
+                "url": "https://tvsmarters.org/hbo/video.m3u8",
                 "title": "HBO",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -697,7 +697,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/hbo2/video.m3u8",
+                "url": "https://tvsmarters.org/hbo2/video.m3u8",
                 "title": "HBO 2",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -722,7 +722,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/hbofamily/video.m3u8",
+                "url": "https://tvsmarters.org/hbofamily/video.m3u8",
                 "title": "HBO FAMILY",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -747,7 +747,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/hboplus/video.m3u8",
+                "url": "https://tvsmarters.org/hboplus/video.m3u8",
                 "title": "HBO PLUS",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -772,7 +772,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/hboxtreme/video.m3u8",
+                'url': "https://tvsmarters.org/hboxtreme/video.m3u8",
                 'title': "HBO XTREME",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -797,7 +797,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/hbosignature/video.m3u8",
+                'url': "https://tvsmarters.org/hbosignature/video.m3u8",
                 'title': "HBO SIGNATURE",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -822,7 +822,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/hbopop/video.m3u8",
+                'url': "https://tvsmarters.org/hbopop/video.m3u8",
                 'title': "HBO POP",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -847,7 +847,7 @@ def canais_list(server):
         'genres': ['Documentarios'],
         'streams': [
             {
-                'url': "https://embedtv.site/history/video.m3u8",
+                'url': "https://tvsmarters.org/history/video.m3u8",
                 'title': "HISTORY",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -872,7 +872,7 @@ def canais_list(server):
         'genres': ['Documentarios'],
         'streams': [
             {
-                'url': "https://embedtv.site/history2/video.m3u8",
+                'url': "https://tvsmarters.org/history2/video.m3u8",
                 'title': "HISTORY 2",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -897,7 +897,7 @@ def canais_list(server):
         'genres': ['Variedades'],
         'streams': [
             {
-                'url': "https://embedtv.site/mtv/video.m3u8",
+                'url': "https://tvsmarters.org/mtv/video.m3u8",
                 'title': "MTV",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -974,7 +974,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/space/video.m3u8",
+                'url': "https://tvsmarters.org/space/video.m3u8",
                 'title': "SPACE",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -999,7 +999,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/tnt/video.m3u8",
+                'url': "https://tvsmarters.org/tnt/video.m3u8",
                 'title': "TNT",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1024,7 +1024,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/tntseries/video.m3u8",
+                'url': "https://tvsmarters.org/tntseries/video.m3u8",
                 'title': "TNT SERIES",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1049,7 +1049,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/tntnovelas/video.m3u8",
+                'url': "https://tvsmarters.org/tntnovelas/video.m3u8",
                 'title': "TNT NOVELAS",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1074,7 +1074,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/tcaction/video.m3u8",
+                'url': "https://tvsmarters.org/tcaction/video.m3u8",
                 'title': "TELECINE ACTION",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1099,7 +1099,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/tccult/video.m3u8",
+                'url': "https://tvsmarters.org/tccult/video.m3u8",
                 'title': "TELECINE CULT",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1124,7 +1124,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/tcfun/video.m3u8",
+                'url': "https://tvsmarters.org/tcfun/video.m3u8",
                 'title': "TELECINE FUN",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1149,7 +1149,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/tcpipoca/video.m3u8",
+                'url': "https://tvsmarters.org/tcpipoca/video.m3u8",
                 'title': "TELECINE PIPOCA",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1174,7 +1174,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/tcpremium/video.m3u8",
+                'url': "https://tvsmarters.org/tcpremium/video.m3u8",
                 'title': "TELECINE PREMIUM",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1199,7 +1199,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/tctouch/video.m3u8",
+                'url': "https://tvsmarters.org/tctouch/video.m3u8",
                 'title': "TELECINE TOUCH",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1224,7 +1224,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/universaltv/video.m3u8",
+                'url': "https://tvsmarters.org/universaltv/video.m3u8",
                 'title': "UNIVERSAL TV",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1273,7 +1273,7 @@ def canais_list(server):
         'genres': ['Filmes e Series'],
         'streams': [
             {
-                'url': "https://embedtv.site/cinemax/video.m3u8",
+                'url': "https://tvsmarters.org/cinemax/video.m3u8",
                 'title': "CINEMAX",
                 'behaviorHints': {
                     'notWebReady': True,
@@ -1324,7 +1324,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/sonychannel/video.m3u8",
+                "url": "https://tvsmarters.org/sonychannel/video.m3u8",
                 "title": "SONY CHANNEL",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1375,7 +1375,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/starchannel/video.m3u8",
+                "url": "https://tvsmarters.org/starchannel/video.m3u8",
                 "title": "STAR CHANNEL",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1400,7 +1400,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/warner/video.m3u8",
+                "url": "https://tvsmarters.org/warner/video.m3u8",
                 "title": "WARNER TV",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1425,7 +1425,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/aee/video.m3u8",
+                "url": "https://tvsmarters.org/aee/video.m3u8",
                 "title": "A&E",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1450,7 +1450,7 @@ def canais_list(server):
         "genres": ["Documentarios"],
         "streams": [
             {
-                "url": "https://embedtv.site/discoveryid/video.m3u8",
+                "url": "https://tvsmarters.org/discoveryid/video.m3u8",
                 "title": "INVESTIGAÇÃO DISCOVERY",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1501,7 +1501,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/megapix/video.m3u8",
+                "url": "https://tvsmarters.org/megapix/video.m3u8",
                 "title": "MEGAPIX",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1526,7 +1526,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/studiouniversal/video.m3u8",
+                "url": "https://tvsmarters.org/studiouniversal/video.m3u8",
                 "title": "STUDIO UNIVERSAL",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1551,7 +1551,7 @@ def canais_list(server):
         "genres": ["Filmes e Series"],
         "streams": [
             {
-                "url": "https://embedtv.site/lifetime/video.m3u8",
+                "url": "https://tvsmarters.org/lifetime/video.m3u8",
                 "title": "LIFETIME",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1628,7 +1628,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/amazonprimevideo/video.m3u8",
+                "url": "https://tvsmarters.org/amazonprimevideo/video.m3u8",
                 "title": "AMAZON PRIME",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1653,7 +1653,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/bandsports/video.m3u8",
+                "url": "https://tvsmarters.org/bandsports/video.m3u8",
                 "title": "BANDSPORTS",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1678,7 +1678,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/espn/video.m3u8",
+                "url": "https://tvsmarters.org/espn/video.m3u8",
                 "title": "ESPN",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1703,7 +1703,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/espn2/video.m3u8",
+                "url": "https://tvsmarters.org/espn2/video.m3u8",
                 "title": "ESPN 2",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1728,7 +1728,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/espn3/video.m3u8",
+                "url": "https://tvsmarters.org/espn3/video.m3u8",
                 "title": "ESPN 3",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1753,7 +1753,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/espn4/video.m3u8",
+                "url": "https://tvsmarters.org/espn4/video.m3u8",
                 "title": "ESPN 4",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1778,7 +1778,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/espn5/video.m3u8",
+                "url": "https://tvsmarters.org/espn5/video.m3u8",
                 "title": "ESPN 5",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1803,7 +1803,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/espn6/video.m3u8",
+                "url": "https://tvsmarters.org/espn6/video.m3u8",
                 "title": "ESPN 6",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1828,7 +1828,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/sportv/video.m3u8",
+                "url": "https://tvsmarters.org/sportv/video.m3u8",
                 "title": "SPORTV",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1853,7 +1853,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/sportv2/video.m3u8",
+                "url": "https://tvsmarters.org/sportv2/video.m3u8",
                 "title": "SPORTV 2",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1878,7 +1878,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/sportv3/video.m3u8",
+                "url": "https://tvsmarters.org/sportv3/video.m3u8",
                 "title": "SPORTV 3",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1903,7 +1903,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/premiereclubes/video.m3u8",
+                "url": "https://tvsmarters.org/premiereclubes/video.m3u8",
                 "title": "PREMIERE CLUBES",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1928,7 +1928,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/premiere2/video.m3u8",
+                "url": "https://tvsmarters.org/premiere2/video.m3u8",
                 "title": "PREMIERE 2",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1953,7 +1953,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/premiere3/video.m3u8",
+                "url": "https://tvsmarters.org/premiere3/video.m3u8",
                 "title": "PREMIERE 3",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -1978,7 +1978,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/premiere4/video.m3u8",
+                "url": "https://tvsmarters.org/premiere4/video.m3u8",
                 "title": "PREMIERE 4",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2003,7 +2003,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/premiere5/video.m3u8",
+                "url": "https://tvsmarters.org/premiere5/video.m3u8",
                 "title": "PREMIERE 5",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2028,7 +2028,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/premiere6/video.m3u8",
+                "url": "https://tvsmarters.org/premiere6/video.m3u8",
                 "title": "PREMIERE 6",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2053,7 +2053,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/premiere7/video.m3u8",
+                "url": "https://tvsmarters.org/premiere7/video.m3u8",
                 "title": "PREMIERE 7",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2078,7 +2078,7 @@ def canais_list(server):
         "genres": ["Esportes"],
         "streams": [
             {
-                "url": "https://embedtv.site/paramountplus/video.m3u8",
+                "url": "https://tvsmarters.org/paramountplus/video.m3u8",
                 "title": "PARAMOUNT+",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2175,7 +2175,7 @@ def canais_list(server):
         'genres': ['Esportes'],
         'streams': [
             {
-                "url": "https://embedtv.site/combate/video.m3u8",
+                "url": "https://tvsmarters.org/combate/video.m3u8",
                 "title": "COMBATE",
                 "behaviorHints": {
                     "notWebReady": True,
@@ -2200,7 +2200,7 @@ def canais_list(server):
         'genres': ['Esportes'],
         'streams': [
             {
-                "url": "https://embedtv.site/cazetv/video.m3u8",
+                "url": "https://tvsmarters.org/cazetv/video.m3u8",
                 "title": "CAZE TV 1",
                 "behaviorHints": {
                     "notWebReady": True,
