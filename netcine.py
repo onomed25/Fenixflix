@@ -93,9 +93,11 @@ def search_term(imdb):
         if name2:
             keys.append(name2)
         try:
-            year_ = re.findall('Série de TV (.*?)\)', title)
+            #year_ = re.findall('Série de TV (.*?)\)', title)
+            year_ = re.findall(r'Série de TV (.*?)\)', title)
             if not year_:
-                year_ = re.findall('\((.*?)\)', title)
+                #year_ = re.findall('\((.*?)\)', title)
+                year_ = re.findall(r'\((.*?)\)', title)
             if year_:
                 year = year_[0]
                 try:
