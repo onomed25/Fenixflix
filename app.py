@@ -1,12 +1,12 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
-from fastapi.middleware.cors import CORS
+from fastapi.middleware.cors import CORSMiddleware  # Corrigido
 
 app = FastAPI()
 
-# Configurar CORS (opcional, caso precise de suporte a cross-origin)
+# Configurar CORS corretamente
 app.add_middleware(
-    CORS,
+    CORSMiddleware,  # Corrigido
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
