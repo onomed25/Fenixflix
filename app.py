@@ -19,13 +19,13 @@ from topflix import search_topflix
 
 VERSION = "0.0.2" # Versão atualizada
 MANIFEST = {
-    "id": "com.fenixsky", "version": VERSION, "name": "FENIXSKY",
+    "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
     "description": "Sua fonte para filmes e séries.",
-    "logo": "https://i.imgur.com/ga7drhc.png", "resources": ["catalog", "meta", "stream"],
+    "logo": "https://i.imgur.com/9SKgxfU.png", "resources": ["catalog", "meta", "stream"],
     "types": ["movie", "series"], "catalogs": [
-        {"type": "movie", "id": "fenixsky", "name": "FENIXSKY", "extraSupported": ["search"]},
-        {"type": "series", "id": "fenixsky", "name": "FENIXSKY", "extraSupported": ["search"]}
-    ], "idPrefixes": ["fenixsky", "tt"]
+        {"type": "movie", "id": "fenixflix", "name": "FENIXFLIX", "extraSupported": ["search"]},
+        {"type": "series", "id": "fenixflix", "name": "FENIXFLIX", "extraSupported": ["search"]}
+    ], "idPrefixes": ["fenixflix", "tt"]
 }
 templates = Environment(loader=FileSystemLoader("templates"))
 limiter = Limiter(key_func=get_remote_address)
