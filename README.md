@@ -1,2 +1,2 @@
-# skyflix
-skyflix is ​​an addon for stremio
+# Fenixflix
+Fenixflix is ​​an addon for stremio

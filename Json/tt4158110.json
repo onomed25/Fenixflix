@@ -1,0 +1,152 @@
+{
+  "id": "tt4158110",
+  "type": "series",
+  "streams": {
+    "1": {
+      "1": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_11857322455temp1ep1.m3u8"
+      ],
+      "2": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_214702950temp1ep2.m3u8"
+      ],
+      "3": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_390285818temp1ep3.m3u8"
+      ],
+      "4": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_4108662666temp1ep4.m3u8"
+      ],
+      "5": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_5104509117temp1ep5.m3u8"
+      ],
+      "6": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_61597625844temp1ep6.m3u8"
+      ],
+      "7": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_782120144temp1ep7.m3u8"
+      ],
+      "8": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_8965712198temp1ep8.m3u8"
+      ],
+      "9": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_9293047975temp1ep9.m3u8"
+      ],
+      "10": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_101354128396temp1ep10.m3u8"
+      ]
+    },
+    "2": {
+      "1": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_11901331697temp2ep1_1.m3u8"
+      ],
+      "2": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_2210697465temp2ep2_1.m3u8"
+      ],
+      "3": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_32524011639temp2ep3_1.m3u8"
+      ],
+      "4": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_45063700temp2ep4_1.m3u8"
+      ],
+      "5": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_51129131096temp2ep5_1.m3u8"
+      ],
+      "6": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_62877731791temp2ep6_1.m3u8"
+      ],
+      "7": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_7768225674temp2ep7_1.m3u8"
+      ],
+      "8": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_82371126312temp2ep8_1.m3u8"
+      ],
+      "9": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_9124855012temp2ep9_1.m3u8"
+      ],
+      "10": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_103130225730temp2ep10_1.m3u8"
+      ],
+      "11": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_1110182320temp2ep11_1.m3u8"
+      ],
+      "12": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_122033418365temp2ep12_1.m3u8"
+      ]
+    },
+    "3": {
+      "1": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_1315907578temp3ep1.m3u8"
+      ],
+      "2": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_22872720837temp3ep2.m3u8"
+      ],
+      "3": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_32169549temp3ep3.m3u8"
+      ],
+      "4": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_4788123535temp3ep4.m3u8"
+      ],
+      "5": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_598896478temp3ep5.m3u8"
+      ],
+      "6": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_63211116193temp3ep6.m3u8"
+      ],
+      "7": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_7182016329temp3ep7.m3u8"
+      ],
+      "8": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_8318613081temp3ep8.m3u8"
+      ],
+      "9": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_9244389701temp3ep9.m3u8"
+      ],
+      "10": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_1031457963temp3ep10.m3u8"
+      ],
+      "11": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_leg_temp4ep11.m3u8"
+      ],
+      "12": [
+        "https://sempra.pro/a1/out/old/6/2816/2816_leg_temp4ep12.m3u8"
+      ]
+    },
+    "4": {
+      "1": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep01.m3u8"
+      ],
+      "2": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep02.m3u8"
+      ],
+      "3": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep03.m3u8"
+      ],
+      "4": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep04.m3u8"
+      ],
+      "5": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep05.m3u8"
+      ],
+      "6": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep06.m3u8"
+      ],
+      "7": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep07.m3u8"
+      ],
+      "8": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep08.m3u8"
+      ],
+      "9": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep09.m3u8"
+      ],
+      "10": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep10.m3u8"
+      ],
+      "11": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep11.m3u8"
+      ],
+      "12": [
+        "https://sempra.pro/a1/out/old/7/2816/2816_dub_temp4ep12.m3u8"
+      ]
+    }
+  }
+}
