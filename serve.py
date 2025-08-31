@@ -28,7 +28,7 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
                 streams_formatados = []
                 for url in urls:
                     streams_formatados.append({
-                        "name": "Fenixflix",
+                        "name": "FenixFlix",
                         "url": url
                     })
                 return streams_formatados
