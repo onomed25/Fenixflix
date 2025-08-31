@@ -14,8 +14,7 @@ import logging
 # Importações dos seus módulos
 from netcine import catalog_search, search_link, search_term
 from gofilmes import search_gofilmes, resolve_stream as resolve_gofilmes_stream
-# Importação da sua função otimizada para ler os arquivos JSON locais
-from topflix import search_topflix
+from serve import search_serve
 
 VERSION = "0.0.2" # Versão atualizada
 MANIFEST = {
@@ -105,18 +104,15 @@ async def stream(type: str, id: str, request: Request):
         except (IndexError, ValueError):
             return add_cors(JSONResponse(content={"streams": []}))
 
-    # --- Fonte 1: JSON Local (usando a função otimizada) ---
     try:
-        local_streams = search_topflix(imdb_id, type, season, episode)
+        local_streams = search_serve(imdb_id, type, season, episode)
         if local_streams:
             all_streams.extend(local_streams)
     except Exception as e:
         logging.error(f"Erro ao buscar em JSON local para {imdb_id}: {e}")
 
-    # Prepara para buscar em fontes online
     titles, _ = search_term(imdb_id)
     if not titles:
-        # Se não encontrar títulos, retorna o que já achou (do JSON local)
         return add_cors(JSONResponse(content={"streams": all_streams}))
 
     # --- Fonte 2: Netcine ---
