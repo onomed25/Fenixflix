@@ -5,23 +5,19 @@ import re
 import json
 import os
 
-def search_topflix(imdb_id, content_type, season=None, episode=None):
-
-    json_path = os.path.join("Json", f"{imdb_id}.json")
+def search_serve(imdb_id, content_type, season=None, episode=None):
+    url = f"http://sudo.wisp.uno:13435/{imdb_id}.json"
     
-    if not os.path.exists(json_path):
-        return []
-
     try:
-        with open(json_path, 'r', encoding='utf-8') as f:
-            local_data = json.load(f)
+        response = requests.get(url)
+        response.raise_for_status()
+        local_data = response.json()
 
         if local_data.get('id') != imdb_id:
             return []
 
         if content_type == 'series' and season and episode:
             try:
-               
                 season_str = str(season)
                 episode_str = str(episode)
 
@@ -38,14 +34,12 @@ def search_topflix(imdb_id, content_type, season=None, episode=None):
                 return streams_formatados
                 
             except Exception:
-               
                 return []
         
         elif content_type == 'movie':
-           
             return local_data.get('streams', [])
 
-    except (IOError, json.JSONDecodeError):
+    except (requests.exceptions.RequestException, json.JSONDecodeError):
         return []
 
     return []
