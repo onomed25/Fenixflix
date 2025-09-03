@@ -323,7 +323,7 @@ def scrape_search(host,headers,text,alternate,year_imdb,type):
 
 def search_link(id):
     streams = []
-    host = 'https://netcinez.si/'
+    host = 'https://netcinef.lat/'
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, como Gecko) Chrome/88.0.4324.96 Safari/537.36"}
     
     try:
@@ -367,7 +367,8 @@ def search_link(id):
                         stream_url, stream_headers = resolve_stream(option['url'])
                         if stream_url:
                             streams.append({
-                                "name": f"Netcine - {option['name']}",
+                                "name": f"FenixFlix",
+                                "description": f"{option['name']}", 
                                 "url": stream_url,
                                 "behaviorHints": {"notWebReady": True, "proxyHeaders": {"request": stream_headers}}
                             })
