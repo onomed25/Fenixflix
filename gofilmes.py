@@ -19,6 +19,7 @@ def search_gofilmes(titles, content_type, season=None, episode=None):
             response = requests.get(url, headers=headers, timeout=10)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
+                player_options = []
                 if content_type == 'series':
                     season_selectors = ['div.panel', 'div.seasons > div.season', 'div[id^="season-"]']
                     panels = []
@@ -26,23 +27,32 @@ def search_gofilmes(titles, content_type, season=None, episode=None):
                         panels = soup.select(selector)
                         if panels:
                             break
-                    if not panels: 
+                    if not (panels and season and episode and 0 < season <= len(panels)):
                         continue
-                    if not (season and episode and 0 < season <= len(panels)): 
-                        continue
+                    
                     selected_panel = panels[season - 1]
                     episode_links = selected_panel.select('div.ep a[href], li a[href]')
+                    
                     if 0 < episode <= len(episode_links):
-                        return [{"name": f"GoFilmes - S{season}E{episode}", "url": urljoin(base_url, episode_links[episode - 1]['href'])}]
+                        episode_page_url = urljoin(base_url, episode_links[episode - 1]['href'])
+                        ep_response = requests.get(episode_page_url, headers=headers, timeout=10)
+                        if ep_response.status_code == 200:
+                            ep_soup = BeautifulSoup(ep_response.text, 'html.parser')
+                            links = ep_soup.select('div.link a[href]')
+                            for link in links:
+                                language = re.sub(r'\s*\d+\s*$', '', link.get_text(strip=True)).strip()
+                                player_options.append({"name": f"FenixFlix - {language}", "url": urljoin(base_url, link['href'])})
                 else:
-                    player_links = soup.select('div.link a[href]')
-                    if player_links:
-                        return [{"name": f"GoFilmes - {link.get_text(strip=True)}", "url": urljoin(base_url, link['href'])} for link in player_links]
+                    links = soup.select('div.link a[href]')
+                    for link in links:
+                        language = re.sub(r'\s*\d+\s*$', '', link.get_text(strip=True)).strip()
+                        player_options.append({"name": f"FenixFlix - {language}", "url": urljoin(base_url, link['href'])})
+                
+                if player_options:
+                    return player_options
         except Exception:
-            # Se der erro, simplesmente tenta o próximo título da lista
             continue
             
-    # Se o loop terminar sem encontrar nada, retorna uma lista vazia
     return []
 
 
