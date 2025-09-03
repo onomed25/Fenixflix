@@ -37,7 +37,7 @@ def search_gofilmes(titles, content_type, season=None, episode=None):
                 else:
                     player_links = soup.select('div.link a[href]')
                     if player_links:
-                        return [{"name": f"FenixFlix", "url": urljoin(base_url, link['href'])} for link in player_links]
+                        return [{"name": "FenixFlix","description": f"{link.get_text(strip=True)}" , "url": urljoin(base_url, link['href'])} for link in player_links]
         except Exception:
             # Se der erro, simplesmente tenta o próximo título da lista
             continue
