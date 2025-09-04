@@ -33,112 +33,106 @@ def catalog_search(text):
     return catalog
 
 def resolve_stream(url):
-    """
-    Função modificada para extrair o link do stream diretamente do iframe na página.
-    """
     parsed_url = urlparse(url)
-    referer = f"{parsed_url.scheme}://{parsed_url.netloc}/"
+    referer = '%s://%s/'%(parsed_url.scheme,parsed_url.netloc)        
     stream = ''
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, como Gecko) Chrome/88.0.4324.96 Safari/537.36",
-        "Referer": referer
-    }
-    
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, como Gecko) Chrome/88.0.4324.96 Safari/537.36"}
+    headers.update({'Cookie': 'XCRF%3DXCRF', 'Referer': referer})
     try:
-        r = requests.get(url, headers=headers)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, 'html.parser')
-        
-        # Procura pelo player "Dublado" primeiro
-        player_dub = soup.select_one('#play-1 iframe')
-        if player_dub and player_dub.has_attr('src'):
-            iframe_src = player_dub['src']
-            # Se o src for um caminho relativo, constrói a URL completa
-            if iframe_src.startswith('/'):
-                 stream = f"{parsed_url.scheme}://{parsed_url.netloc}{iframe_src}"
-            else:
-                 stream = iframe_src
-            return stream, headers
-
-        # Se não encontrar dublado, procura pelo "Legendado"
-        player_leg = soup.select_one('#play-2 iframe')
-        if player_leg and player_leg.has_attr('src'):
-            iframe_src = player_leg['src']
-            if iframe_src.startswith('/'):
-                 stream = f"{parsed_url.scheme}://{parsed_url.netloc}{iframe_src}"
-            else:
-                 stream = iframe_src
-            return stream, headers
+        r = requests.get(url,headers=headers)
+        src = r.text
+        soup = BeautifulSoup(src, 'html.parser')
+        url = soup.find('div', {'id': 'content'}).find_all('a')[0].get('href', '') 
+    except:
+        pass        
             
-    except requests.exceptions.RequestException as e:
-        print(f"Erro ao acessar a URL do player: {e}")
-    except Exception as e:
-        print(f"Erro ao processar a página do player: {e}")
-        
+    try:
+        r = requests.get(url,headers=headers)
+        src = r.text
+        regex_pattern = r'<source[^>]*\s+src="([^"]+)"'
+        alto = []
+        baixo = []
+        matches = re.findall(regex_pattern, src)
+        for match in matches:
+            if 'ALTO' in match:
+                alto.append(match)
+            if 'alto' in match:
+                alto.append(match)
+            if 'BAIXO' in match:
+                baixo.append(match)
+            if 'baixo' in match:
+                baixo.append(match)  
+        if alto:
+            stream = alto[-1]
+            if ' ' in stream:
+                stream = ''
+        elif baixo:
+            stream = baixo[-1]
+            if ' ' in stream:
+                stream = ''            
+    except:
+        pass
     return stream, headers
 
 def search_term(imdb):
-    url = f'https://www.imdb.com/title/{imdb}/'
+    url = 'https://www.imdb.com/pt/title/%s/'%imdb
     keys = []
-    year = ''
     try:
-        r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0', 'Accept-Language': 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3'})
-        r.raise_for_status()
+        r = requests.get(url,headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0', 'Accept-Language': 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3'})
         src = r.text
-        
-        script = re.search('json">(.*?)</script>', src, re.DOTALL)
-        if script:
-            data = json.loads(script.group(1))
-            name = data.get('name', '')
-            alternate_name = data.get('alternateName', '')
-            if name:
-                keys.append(name)
-            if alternate_name:
-                keys.append(alternate_name)
+        script = re.findall('json">(.*?)</script>', src, re.DOTALL)[0]
+        title = re.findall('<title>(.*?)</title>', src)[0]
+        data = json.loads(script)
+        name = data.get('name', '')
+        name2 = data.get('alternateName', '')
+        if name:
+            keys.append(name)
+        if name2:
+            keys.append(name2)
+        try:
+            year_ = re.findall(r'Série de TV (.*?)\)', title)
+            if not year_:
+                year_ = re.findall(r'\((.*?)\)', title)
+            if year_:
+                year = year_[0]
+                try:
+                    year = year.split('–')[0]
+                except:
+                    pass
+        except:
+            year = ''       
 
-        title_tag = re.search('<title>(.*?)</title>', src)
-        if title_tag:
-            title = title_tag.group(1)
-            year_match = re.search(r'\(.*?(\d{4}).*?\)', title)
-            if year_match:
-                year = year_match.group(1)
-
-    except Exception as e:
-        print(f"Erro ao buscar termo no IMDB: {e}")
+    except:
         pass
     return keys, year
 
 def opcoes_filmes(url, headers, host):
-    """
-    Função ajustada para lidar com a nova estrutura e retornar os links das opções de player.
-    """
     player_links = []
     try:
+        headers.update({'Cookie': 'XCRF%3DXCRF'})
         r = requests.get(url, headers=headers)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, 'html.parser')
+        src = r.text
+        soup = BeautifulSoup(src, 'html.parser')
+        player = soup.find('div', {'id': 'player-container'})
+        botoes = player.find('ul', {'class': 'player-menu'})
+        op = botoes.findAll('li')
+        op_list = []
+        if op:
+            for i in op:
+                a = i.find('a')
+                id_ = a.get('href', '').replace('#', '')
+                op_name = a.text.strip().upper()
+                op_list.append((op_name, id_))
         
-        player_menu = soup.select('.player-menu li a')
-        if not player_menu:
-            return player_links
-
-        for item in player_menu:
-            player_id = item.get('href', '').replace('#', '')
-            player_name = item.get_text(strip=True).upper()
-            
-            iframe_container = soup.select_one(f'#{player_id} iframe')
-            if iframe_container and iframe_container.has_attr('src'):
-                iframe_src = iframe_container['src']
-                # Constrói a URL completa se for um caminho relativo
-                link = urlparse(url).scheme + "://" + urlparse(url).netloc + iframe_src if iframe_src.startswith('/') else iframe_src
+        if op_list:
+            for name, id_ in op_list:
+                iframe = player.find('div', {'class': 'play-c'}).find('div', {'id': id_}).find('iframe').get('src', '')
+                link = host + iframe if not 'streamtape' in iframe else iframe
                 
-                if not 'streamtape' in link: # Evita links do streamtape conforme lógica original
-                    player_links.append({'name': player_name.replace(' 1', ''), 'url': link})
-
-    except Exception as e:
-        print(f"Erro ao obter opções de filmes: {e}")
+                if not 'streamtape' in link:
+                    player_links.append({'name': name.replace(' 1', ''), 'url': link})
+    except:
         pass
-        
     return player_links
 
 def check_item(search,headers,year_imdb,text):
@@ -146,8 +140,6 @@ def check_item(search,headers,year_imdb,text):
     src = r.text
     soup = BeautifulSoup(src,'html.parser')
     box = soup.find("div", {"id": "box_movies"})
-    if not box:
-        return []
     movies = box.findAll("div", {"class": "movie"})
     count = 0
     for i in movies:
@@ -157,7 +149,12 @@ def check_item(search,headers,year_imdb,text):
         except:
             year = ''
         name = i.find('h2').text
-        
+        try:
+            name = name.decode('utf-8')
+        except: pass
+        try:
+            name = name.decode()
+        except: pass           
         if ':' in text:
             text_search = text.split(':')[1].replace(' ', '').lower()
             name_search = name.replace(' ', '').lower()
@@ -165,15 +162,19 @@ def check_item(search,headers,year_imdb,text):
                 count += 1
                 break
         else:
-            if str(year_imdb) in str(year) or \
-               (year_imdb and str(int(year_imdb) + 1) in str(year)) or \
-               (year_imdb and str(int(year_imdb) - 1) in str(year)):
+            if str(year_imdb) in str(year):
+                count += 1
+                break
+            elif str(int(year_imdb) + 1) in str(year):
+                count += 1         
+                break
+            elif str(int(year_imdb) - 1) in str(year):
                 count += 1
                 break
     if count > 0:
         return movies
     else:
-        return []
+        return []        
 
 def scrape_search(host,headers,text,alternate,year_imdb,type):
     text = text.replace('&amp;', '&')
@@ -201,36 +202,128 @@ def scrape_search(host,headers,text,alternate,year_imdb,type):
         except: movies = []
     for i in movies:
         name = i.find('h2').text
+        try: name = name.decode('utf-8')
+        except: pass
         name_backup = name
         text_backup = text
         textalternate_backup = alternate
-        
-        # Simplificação e normalização dos nomes para comparação
-        name_norm = name.lower().replace(':', '').strip()
-        text_norm = text.lower().replace(':', '').strip()
-        alternate_norm = alternate.lower().replace(':', '').strip()
-        
-        year = i.find('span', {'class': 'year'}).text.replace('–', '') if i.find('span', {'class': 'year'}) else ''
-        link = i.find('div', {'class': 'imagen'}).find('a').get('href', '') if i.find('div', {'class': 'imagen'}) else ''
-
-        # Condições de match
-        year_match = str(year_imdb) in str(year) or \
-                     (year_imdb and str(int(year_imdb) + 1) in str(year)) or \
-                     (year_imdb and str(int(year_imdb) - 1) in str(year))
-        
-        title_match = text_norm in name_norm or alternate_norm in name_norm
-
-        if year_match and title_match:
-            if type == 'tvshows' and '/tvshows/' in link:
+        try:
+            keys = name.split(' ')
+            name2 = ' '.join(keys[:-1])
+        except: name2 = ''
+        try:
+            keys2 = text.split(' ')
+            text2 = ' '.join(keys2[:-1])
+        except: text2 = ''                           
+        try:
+            year = i.find('span', {'class': 'year'}).text
+            year = year.replace('–', '')
+        except:
+            year = ''
+        try:
+            text = text.lower().replace(':', '')
+        except: pass
+        try:
+            textalternate = alternate.lower().replace(':', '')
+        except: pass        
+        try:
+            name = name.lower().replace(':', '')
+        except: pass
+        try:
+            text2 = text2.lower()
+        except: pass
+        try:
+            name2 = name2.lower()
+        except: pass
+        try:
+            name3 = name2.replace(' –', ':')
+        except: name3 = ''
+        try:
+            count_text = len(name3.split(' '))
+        except: count_text = 0
+        try:
+            if ':' in name_backup:
+                name4 = name_backup.split(': ')[1].lower()
+            else: name4 = ''
+        except: name4 = ''
+        try:
+            if ':' in text_backup:
+                text3 = text_backup.split(': ')[1].lower()
+            else: text3 = ''
+        except: text3 = ''
+        try:
+            if ':' in textalternate_backup:
+                textalternate2 = textalternate_backup.split(': ')[1].lower()
+            else: textalternate2 = ''
+        except: textalternate2 = ''            
+        if '&' in text:
+            text4 = text.replace('&', 'e')
+        else: text4 = text
+        if '&' in name and not '&amp;' in name:
+            name5 = name.replace('&', 'e')
+        else: name5 = name
+        if ' e ' in text:
+            text5 = text.replace(' e ', ' & ')
+        else: text5 = text 
+        if ' e ' in name:
+            name6 = name.replace(' e ', ' & ')
+        else: name6 = name
+        try:
+            count_text2 = len(text.split(' '))
+        except: count_text2 = 0
+        try:
+            img = i.find('div', {'class': 'imagen'})
+            link = img.find('a').get('href', '')
+        except: link = ''
+        count_name_ = len(name)
+        count_text_ = len(text)
+        if type == 'tvshows' and '/tvshows/' in link:
+            if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
                 return link, new_host
-            elif type == 'movies' and not '/tvshows/' in link:
+            elif text2 in name3 and str(year_imdb) in str(year):
+                return link, new_host 
+            elif text2 in name3 and str(int(year_imdb) + 1) in str(year) and count_text > 1 and not count_name_ > count_text_:     
                 return link, new_host
-                                                           
+            elif text2 in name3 and str(int(year_imdb) - 1) in str(year) and count_text > 1 and not count_name_ > count_text_:    
+                return link, new_host
+            elif text3 in name4 and str(year_imdb) in str(year) and text3 and name4:
+                return link, new_host
+            elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:               
+                return link, new_host
+            elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:              
+                return link, new_host
+            elif textalternate in name and str(year_imdb) in str(year) or textalternate2 in name4 and str(year_imdb) in str(year):
+                return link, new_host
+            elif text in name and str(int(year_imdb) + 1) in str(year) and count_text2 > 0 and not count_name_ > count_text_:
+                return link, new_host
+            elif text in name and str(int(year_imdb) -1) in str(year) and count_text2 > 0 and not count_name_ > count_text_:
+                return link, new_host              
+        elif type == 'movies' and not '/tvshows/' in link: 
+            if text in name and str(year_imdb) in str(year) or text2 in name2 and str(year_imdb) in str(year):
+                return link, new_host
+            elif text2 in name3 and str(year_imdb) in str(year):
+                return link, new_host 
+            elif text2 in name3 and str(int(year_imdb) + 1) in str(year) and count_text > 1 and not count_name_ > count_text_:     
+                return link, new_host
+            elif text2 in name3 and str(int(year_imdb) - 1) in str(year) and count_text > 1 and not count_name_ > count_text_:    
+                return link, new_host
+            elif text3 in name4 and str(year_imdb) in str(year) and text3 and name4:
+                return link, new_host
+            elif text4 in name5 and str(year_imdb) in str(year) and text4 and name5:               
+                return link, new_host
+            elif len(text5) == len(name6) and str(year_imdb) in str(year) and text5 and name6:              
+                return link, new_host
+            elif textalternate in name and str(year_imdb) in str(year) or textalternate2 in name4 and str(year_imdb) in str(year):
+                return link, new_host
+            elif text in name and str(int(year_imdb) + 1) in str(year) and count_text2 > 0 and not count_name_ > count_text_:
+                return link, new_host
+            elif text in name and str(int(year_imdb) -1) in str(year) and count_text2 > 0 and not count_name_ > count_text_:
+                return link, new_host                                                            
     return '', ''   
 
 def search_link(id):
     streams = []
-    host = 'https://nccios.xyz/' # Domínio atualizado
+    host = 'https://netcinef.lat/'
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, como Gecko) Chrome/88.0.4324.96 Safari/537.36"}
     
     try:
@@ -244,26 +337,24 @@ def search_link(id):
                 if '/tvshows/' in link:
                     r = requests.get(link, headers=headers)
                     soup = BeautifulSoup(r.text, 'html.parser')
-                    s = soup.select('#seasons .se-c .episodiotitle a')
-                    for ep_link in s:
-                        # Extrai o número da temporada e episódio do próprio link
-                        match = re.search(r'-(\d+)x(\d+)$', ep_link.get('href', ''))
-                        if match:
-                            s_num, ep_num = match.groups()
-                            if int(s_num) == int(season) and int(ep_num) == int(episode):
-                                link_ep = ep_link.get('href')
-                                player_options = opcoes_filmes(link_ep, headers, new_host)
-                                for option in player_options:
-                                    stream_url, stream_headers = resolve_stream(option['url'])
-                                    if stream_url:
-                                        streams.append({
-                                            "name": f"Netcine - {option['name']}",
-                                            "url": stream_url,
-                                            "behaviorHints": {"notWebReady": True, "proxyHeaders": {"request": stream_headers}}
-                                        })
-                                break # Encontrou o episódio, pode parar o loop
-                    if streams: return streams
-                                    
+                    s = soup.find('div', {'id': 'movie'}).find('div', {'class': 'post'}).find('div', {'id': 'cssmenu'}).find('ul').findAll('li', {'class': 'has-sub'})
+                    for n, i in enumerate(s, 1):
+                        if int(season) == n:
+                            e = i.find('ul').findAll('li')
+                            for n_ep, i_ep in enumerate(e, 1):
+                                if int(episode) == n_ep:
+                                    link_ep = i_ep.find('a').get('href')
+                                    player_options = opcoes_filmes(link_ep, headers, new_host)
+                                    for option in player_options:
+                                        stream_url, stream_headers = resolve_stream(option['url'])
+                                        if stream_url:
+                                            streams.append({
+                                                "name": f"Netcine - {option['name']}",
+                                                "url": stream_url,
+                                                "behaviorHints": {"notWebReady": True, "proxyHeaders": {"request": stream_headers}}
+                                            })
+                                    break
+                            break   
         else: # Lógica para Filmes
             imdb = id
             search_text, year_imdb = search_term(imdb)
@@ -281,7 +372,6 @@ def search_link(id):
                                 "url": stream_url,
                                 "behaviorHints": {"notWebReady": True, "proxyHeaders": {"request": stream_headers}}
                             })
-    except Exception as e:
-        print(f"Erro na busca de link: {e}")
+    except:
         pass
     return streams
