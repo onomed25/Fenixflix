@@ -13,15 +13,30 @@ from netcine import catalog_search, search_link, search_term
 from gofilmes import search_gofilmes, resolve_stream as resolve_gofilmes_stream
 from serve import search_serve
 
-VERSION = "0.0.3" # Versão otimizada
+VERSION = "0.0.4" # Versão com correção da busca
 MANIFEST = {
-    "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
+    "id": "com.skyflix", # Corrigido para o ID original
+    "version": VERSION,
+    "name": "FENIXFLIX",
     "description": "Sua fonte para filmes e séries.",
-    "logo": "https://i.imgur.com/9SKgxfU.png", "resources": ["catalog", "meta", "stream"],
-    "types": ["movie", "series"], "catalogs": [
-        {"type": "movie", "id": "fenixflix", "name": "FENIXFLIX", "extraSupported": ["search"]},
-        {"type": "series", "id": "fenixflix", "name": "FENIXFLIX", "extraSupported": ["search"]}
-    ], "idPrefixes": ["fenixflix", "tt"]
+    "logo": "https://i.imgur.com/9SKgxfU.png",
+    "resources": ["catalog", "meta", "stream"],
+    "types": ["movie", "series"],
+    "catalogs": [
+        {
+            "type": "movie",
+            "id": "skyflix", # Corrigido para o ID original
+            "name": "FENIXFLIX",
+            "extraSupported": ["search"]
+        },
+        {
+            "type": "series",
+            "id": "skyflix", # Corrigido para o ID original
+            "name": "FENIXFLIX",
+            "extraSupported": ["search"]
+        }
+    ],
+    "idPrefixes": ["skyflix", "tt"] # Corrigido para o ID original
 }
 templates = Environment(loader=FileSystemLoader("templates"))
 limiter = Limiter(key_func=get_remote_address)
@@ -55,11 +70,11 @@ async def home(request: Request):
 async def manifest(request: Request):
     return add_cors(JSONResponse(content=MANIFEST))
 
-@app.get("/catalog/{type}/fenixsky/search={query}.json")
+# ROTA DE BUSCA CORRIGIDA
+@app.get("/catalog/{type}/skyflix/search={query}.json")
 @limiter.limit(rate_limit)
 async def search(type: str, query: str, request: Request):
     loop = asyncio.get_running_loop()
-    # Executa a busca síncrona em um executor para não bloquear
     catalog = await loop.run_in_executor(None, catalog_search, query)
     results = [item for item in catalog if item.get("type") == type] if catalog else []
     return add_cors(JSONResponse(content={"metas": results}))
@@ -74,7 +89,6 @@ async def meta(type: str, id: str, request: Request):
 async def fetch_netcine(id: str):
     loop = asyncio.get_running_loop()
     try:
-        # Executa a função síncrona num thread pool para não bloquear o loop de eventos
         netcine_streams = await loop.run_in_executor(None, search_link, id)
         return netcine_streams if netcine_streams else []
     except Exception as e:
@@ -88,7 +102,6 @@ async def fetch_gofilmes(titles, type, season, episode):
         
         streams = []
         for option in gofilmes_player_options:
-            # resolve_stream também é síncrono, então executamos no executor
             stream_url, stream_headers = await loop.run_in_executor(None, resolve_gofilmes_stream, option['url'])
             if stream_url:
                 stream_name = option['name']
