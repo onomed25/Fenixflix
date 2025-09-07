@@ -10,13 +10,32 @@ from html import unescape
 import os
 import json
 import logging
+import asyncio
+from contextlib import asynccontextmanager
+
+# Importações para o cache
+from redis import asyncio as aioredis
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from fastapi_cache.decorator import cache
 
 # Importações dos seus módulos
 from netcine import catalog_search, search_link, search_term
 from gofilmes import search_gofilmes, resolve_stream as resolve_gofilmes_stream
 from serve import search_serve
 
-VERSION = "0.0.2" # Versão atualizada
+# Configuração do ciclo de vida da aplicação para o cache
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Conecta ao Redis. Certifique-se de que o Redis está a correr.
+    # Se estiver a usar Docker, o nome do host será o nome do serviço do Redis (ex: "redis://redis").
+    redis = aioredis.from_url("redis://localhost", encoding="utf-8", decode_responses=True)
+    FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
+    yield
+    # Limpa a conexão ao finalizar
+    await FastAPICache.clear()
+
+VERSION = "0.0.3" # Versão atualizada com otimizações
 MANIFEST = {
     "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
     "description": "Sua fonte para filmes e séries.",
@@ -29,7 +48,7 @@ MANIFEST = {
 templates = Environment(loader=FileSystemLoader("templates"))
 limiter = Limiter(key_func=get_remote_address)
 rate_limit = '5/second'
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -44,22 +63,6 @@ def add_cors(response: Response):
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
-# A função para resolver links do Streamtape pode ser mantida se for usada por outras fontes
-def resolve_streamtape_link(player_url: str):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        page_content = requests.get(player_url, headers=headers).text
-        video_url_part = re.search(r'<div id="robotlink" style="display:none;">(.*?)</div>', page_content)
-        if not video_url_part:
-            video_url_part = re.search(r'<span id="botlink" style="display:none;">(.*?)</span>', page_content)
-        
-        if not video_url_part: return None
-
-        direct_video_url = "https:" + video_url_part.group(1)
-        return {"name": "Streamtape Robusto", "url": direct_video_url, "behaviorHints": {"proxyHeaders": {"request": {"User-Agent": "Mozilla/5.0", "Referer": player_url}}}}
-    except Exception:
-        return None
-
 @app.get("/", response_class=HTMLResponse)
 @limiter.limit(rate_limit)
 async def home(request: Request):
@@ -71,8 +74,8 @@ async def home(request: Request):
 async def manifest(request: Request):
     return add_cors(JSONResponse(content=MANIFEST))
 
-# Rota de busca corrigida para usar 'fenixsky'
-@app.get("/catalog/{type}/fenixsky/search={query}.json")
+@app.get("/catalog/{type}/fenixflix/search={query}.json")
+@cache(expire=86400) # Cache de 24 horas
 @limiter.limit(rate_limit)
 async def search(type: str, query: str, request: Request):
     catalog = catalog_search(query)
@@ -80,16 +83,57 @@ async def search(type: str, query: str, request: Request):
     return add_cors(JSONResponse(content={"metas": results}))
 
 @app.get("/meta/{type}/{id}.json")
+@cache(expire=86400) # Cache de 24 horas
 @limiter.limit(rate_limit)
 async def meta(type: str, id: str, request: Request):
-    # A lógica de metadados pode ser implementada aqui no futuro
+    # A lógica de metadados pode ser expandida aqui, se necessário.
     return add_cors(JSONResponse(content={"meta": {}}))
 
+
+# Funções de busca assíncronas para serem executadas em paralelo
+async def search_serve_async(imdb_id, content_type, season, episode):
+    try:
+        loop = asyncio.get_event_loop()
+        # Executa a função síncrona num executor para não bloquear o loop de eventos
+        return await loop.run_in_executor(None, search_serve, imdb_id, content_type, season, episode)
+    except Exception as e:
+        logging.error(f"Erro ao buscar em JSON local para {imdb_id}: {e}")
+        return []
+
+async def search_link_async(id):
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, search_link, id)
+    except Exception as e:
+        logging.error(f"Erro ao buscar em Netcine para {id}: {e}")
+        return []
+
+async def search_gofilmes_async(titles, type, season, episode):
+    try:
+        loop = asyncio.get_event_loop()
+        player_options = await loop.run_in_executor(None, search_gofilmes, titles, type, season, episode)
+        
+        streams = []
+        for option in player_options:
+            stream_url, stream_headers = await loop.run_in_executor(None, resolve_gofilmes_stream, option['url'])
+            if stream_url:
+                stream_name = option.get('name', 'GoFilmes')
+                if 'mediafire.com' in stream_url:
+                    stream_name += " (Só no Navegador)"
+                
+                stream_obj = {"name": stream_name, "url": stream_url}
+                if stream_headers:
+                    stream_obj["behaviorHints"] = {"proxyHeaders": {"request": stream_headers}}
+                streams.append(stream_obj)
+        return streams
+    except Exception as e:
+        logging.error(f"Erro ao buscar em GoFilmes para {titles}: {e}")
+        return []
+
 @app.get("/stream/{type}/{id}.json")
+@cache(expire=3600) # Cache de 1 hora
 @limiter.limit(rate_limit)
 async def stream(type: str, id: str, request: Request):
-    all_streams = []
-
     if type not in ["movie", "series"]:
         return add_cors(JSONResponse(content={"streams": []}))
 
@@ -104,41 +148,21 @@ async def stream(type: str, id: str, request: Request):
         except (IndexError, ValueError):
             return add_cors(JSONResponse(content={"streams": []}))
 
-    try:
-        local_streams = search_serve(imdb_id, type, season, episode)
-        if local_streams:
-            all_streams.extend(local_streams)
-    except Exception as e:
-        logging.error(f"Erro ao buscar em JSON local para {imdb_id}: {e}")
-
     titles, _ = search_term(imdb_id)
     if not titles:
-        return add_cors(JSONResponse(content={"streams": all_streams}))
+        # Se não encontrar títulos, ainda tenta a busca local
+        local_streams = await search_serve_async(imdb_id, type, season, episode)
+        return add_cors(JSONResponse(content={"streams": local_streams}))
 
-    # --- Fonte 2: Netcine ---
-    try:
-        netcine_streams = search_link(id)
-        if netcine_streams:
-            all_streams.extend(netcine_streams)
-    except Exception as e:
-        logging.error(f"Erro ao buscar em Netcine para {id}: {e}")
+    # Executa todas as buscas em paralelo
+    results = await asyncio.gather(
+        search_serve_async(imdb_id, type, season, episode),
+        search_link_async(id),
+        search_gofilmes_async(titles, type, season, episode)
+    )
 
-    # --- Fonte 3: GoFilmes ---
-    try:
-        gofilmes_player_options = search_gofilmes(titles, type, season, episode)
-        for option in gofilmes_player_options:
-            stream_url, stream_headers = resolve_gofilmes_stream(option['url'])
-            if stream_url:
-                stream_name = option['name']
-                if 'mediafire.com' in stream_url:
-                    stream_name += " (Só no Navegador)"
-                
-                stream_obj = {"name": stream_name, "url": stream_url}
-                if stream_headers:
-                    stream_obj["behaviorHints"] = {"proxyHeaders": {"request": stream_headers}}
-                all_streams.append(stream_obj)
-    except Exception as e:
-        logging.error(f"Erro ao buscar em GoFilmes para {id}: {e}")
+    # Junta os resultados de todas as fontes
+    all_streams = [stream for result in results for stream in result]
         
     return add_cors(JSONResponse(content={"streams": all_streams}))
 
