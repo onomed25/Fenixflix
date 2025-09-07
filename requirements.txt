@@ -6,5 +6,3 @@ uvicorn
 jinja2
 slowapi
 selenium
-httpx
-cachetools
