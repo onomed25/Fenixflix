@@ -33,11 +33,12 @@ def search_gofilmes(titles, content_type, season=None, episode=None):
                     selected_panel = panels[season - 1]
                     episode_links = selected_panel.select('div.ep a[href], li a[href]')
                     if 0 < episode <= len(episode_links):
-                        return [{"name": f"FenixFlix","description": f"Go","url": urljoin(base_url, episode_links[episode - 1]['href'])}]
+                        return [{"name": "FenixFlix", "description": "Go", "url": urljoin(base_url, episode_links[episode - 1]['href'])}]
                 else:
                     player_links = soup.select('div.link a[href]')
                     if player_links:
-                        return [{"name": f"FenixFlix","description": f"Go- {link.get_text(strip=True)} " , "url": urljoin(base_url, link['href'])} for link in player_links]
+                        # CORREÇÃO APLICADA AQUI
+                        return [{"name": "FenixFlix", "description": f"{link.get_text(strip=True)} - Go", "url": urljoin(base_url, link['href'])} for link in player_links]
         except Exception:
             # Se der erro, simplesmente tenta o próximo título da lista
             continue
@@ -48,7 +49,7 @@ def search_gofilmes(titles, content_type, season=None, episode=None):
 
 def resolve_stream(player_url):
     """
-    Resolve o stream com múltiplos métodos, agora retornando links do MediaFire para serem tratados no app.py.
+    Resolve o stream com múltiplos métodos.
     """
     try:
         headers = {

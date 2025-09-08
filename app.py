@@ -118,10 +118,16 @@ async def search_gofilmes_async(titles, type, season, episode):
             stream_url, stream_headers = await loop.run_in_executor(None, resolve_gofilmes_stream, option['url'])
             if stream_url:
                 stream_name = option.get('name', 'GoFilmes')
+                # --- ALTERAÇÃO AQUI para usar a descrição vinda do gofilmes.py ---
+                stream_description = option.get('description', 'GoFilmes')
+
                 if 'mediafire.com' in stream_url:
                     stream_name += " (Só no Navegador)"
                 
-                stream_obj = {"name": stream_name, "url": stream_url}
+                # O objeto do stream agora tem um campo "description" que será exibido no Stremio
+                stream_obj = {"name": stream_name, "description": stream_description, "url": stream_url}
+                # --- FIM DA ALTERAÇÃO ---
+
                 if stream_headers:
                     stream_obj["behaviorHints"] = {"proxyHeaders": {"request": stream_headers}}
                 streams.append(stream_obj)
@@ -131,7 +137,7 @@ async def search_gofilmes_async(titles, type, season, episode):
         return []
 
 @app.get("/stream/{type}/{id}.json")
-@cache(expire=3600) # Cache de 1 hora
+@cache(expire=4600) # Cache de 1 hora
 @limiter.limit(rate_limit)
 async def stream(type: str, id: str, request: Request):
     if type not in ["movie", "series"]:
