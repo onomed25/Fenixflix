@@ -11,29 +11,11 @@ import os
 import json
 import logging
 import asyncio
-from contextlib import asynccontextmanager
-
-# Importações para o cache
-from redis import asyncio as aioredis
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.redis import RedisBackend
-from fastapi_cache.decorator import cache
 
 # Importações dos seus módulos
 from netcine import catalog_search, search_link, search_term
 from gofilmes import search_gofilmes, resolve_stream as resolve_gofilmes_stream
 from serve import search_serve
-
-# Configuração do ciclo de vida da aplicação para o cache
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Conecta ao Redis. Certifique-se de que o Redis está a correr.
-    # Se estiver a usar Docker, o nome do host será o nome do serviço do Redis (ex: "redis://redis").
-    redis = aioredis.from_url("redis://localhost", encoding="utf-8", decode_responses=True)
-    FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
-    yield
-    # Limpa a conexão ao finalizar
-    await FastAPICache.clear()
 
 VERSION = "0.0.3" # Versão atualizada com otimizações
 MANIFEST = {
@@ -48,7 +30,8 @@ MANIFEST = {
 templates = Environment(loader=FileSystemLoader("templates"))
 limiter = Limiter(key_func=get_remote_address)
 rate_limit = '5/second'
-app = FastAPI(lifespan=lifespan)
+# A inicialização do FastAPI foi alterada para remover o 'lifespan'
+app = FastAPI()
 
 logging.basicConfig(level=logging.INFO)
 
@@ -75,7 +58,6 @@ async def manifest(request: Request):
     return add_cors(JSONResponse(content=MANIFEST))
 
 @app.get("/catalog/{type}/fenixflix/search={query}.json")
-@cache(expire=86400) # Cache de 24 horas
 @limiter.limit(rate_limit)
 async def search(type: str, query: str, request: Request):
     catalog = catalog_search(query)
@@ -83,7 +65,6 @@ async def search(type: str, query: str, request: Request):
     return add_cors(JSONResponse(content={"metas": results}))
 
 @app.get("/meta/{type}/{id}.json")
-@cache(expire=86400) # Cache de 24 horas
 @limiter.limit(rate_limit)
 async def meta(type: str, id: str, request: Request):
     # A lógica de metadados pode ser expandida aqui, se necessário.
@@ -137,7 +118,6 @@ async def search_gofilmes_async(titles, type, season, episode):
         return []
 
 @app.get("/stream/{type}/{id}.json")
-@cache(expire=4600) # Cache de 1 hora
 @limiter.limit(rate_limit)
 async def stream(type: str, id: str, request: Request):
     if type not in ["movie", "series"]:
