@@ -1,10 +1,6 @@
 import requests
-from bs4 import BeautifulSoup
-from urllib.parse import quote
-import re
-import json
-import os
 import logging
+import json
 
 # Configura o logging para este módulo
 logger = logging.getLogger(__name__)
@@ -14,18 +10,21 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
     Busca streams de um serviço externo com base no IMDb ID.
     Adicionado logging para depuração de falhas de conexão ou parsing.
     """
+    # --- URL REVERTIDA PARA O SERVIDOR EXTERNO ORIGINAL ---
     url = f"http://sudo.wisp.uno:13435/{imdb_id}.json"
     
     try:
         # Adicionado um timeout para a requisição não ficar presa indefinidamente
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=5)
         response.raise_for_status()  # Lança uma exceção para status de erro (4xx ou 5xx)
         local_data = response.json()
 
+        # A verificação de ID continua sendo uma boa prática
         if local_data.get('id') != imdb_id:
-            logger.warning(f"ID do IMDB não corresponde no JSON para {imdb_id}. Esperado: {imdb_id}, Recebido: {local_data.get('id')}")
+            logger.warning(f"ID do IMDB não corresponde no JSON para {imdb_id}.")
             return []
 
+        # O restante da lógica para filmes e séries permanece o mesmo
         if content_type == 'series' and season and episode:
             try:
                 season_str = str(season)
@@ -50,7 +49,7 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
                 return streams_formatados
                 
             except Exception as e:
-                logger.error(f"Erro ao processar streams de séries para {imdb_id} S{season}E{episode}: {e}")
+                logger.error(f"Erro ao processar streams de séries do JSON para {imdb_id}: {e}")
                 return []
         
         elif content_type == 'movie':
@@ -71,16 +70,14 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
             return streams_formatados
 
     except requests.exceptions.RequestException as e:
-        # Loga o erro de conexão
-        logger.error(f"Falha ao conectar com o servidor de streams para {imdb_id}. Erro: {e}")
+        logger.error(f"Falha ao conectar com o servidor de streams em {url}. Erro: {e}")
         return []
     except json.JSONDecodeError as e:
-        # Loga o erro de parsing do JSON
         logger.error(f"Falha ao decodificar o JSON da resposta para {imdb_id}. Erro: {e}")
         return []
     except Exception as e:
-        # Pega qualquer outra exceção inesperada
         logger.error(f"Ocorreu um erro inesperado em search_serve para {imdb_id}: {e}")
         return []
 
     return []
+
