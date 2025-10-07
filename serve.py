@@ -11,7 +11,7 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
     Adicionado logging para depuração de falhas de conexão ou parsing.
     """
     # --- URL REVERTIDA PARA O SERVIDOR EXTERNO ORIGINAL ---
-    url = f"http://sudo.wisp.uno:13435/{imdb_id}.json"
+    url = f"http://217.160.125.125:13435/{imdb_id}.json"
     
     try:
         # Adicionado um timeout para a requisição não ficar presa indefinidamente
