@@ -7,7 +7,7 @@ def search_gofilmes(titles, content_type, season=None, episode=None):
     """
     Busca por um filme ou série no GoFilmes e retorna o link da página do player.
     """
-    base_url = "https://gofilmess.top"
+    base_url = "https://gofilmes.cloud"
     for title in titles:
         if not title or len(title) < 2: 
             continue
