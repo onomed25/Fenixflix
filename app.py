@@ -14,7 +14,7 @@ import asyncio
 
 # Importações dos seus módulos
 from netcine import catalog_search, search_link, search_term
-from gofilmes import search_gofilmes, resolve_stream as resolve_gofilmes_stream
+# from gofilmes import search_gofilmes, resolve_stream as resolve_gofilmes_stream  # <--- COMENTADO
 from serve import search_serve
 
 VERSION = "0.0.3" # Versão atualizada com otimizações
@@ -89,33 +89,35 @@ async def search_link_async(id):
         logging.error(f"Erro ao buscar em Netcine para {id}: {e}")
         return []
 
-async def search_gofilmes_async(titles, type, season, episode):
-    try:
-        loop = asyncio.get_event_loop()
-        player_options = await loop.run_in_executor(None, search_gofilmes, titles, type, season, episode)
-        
-        streams = []
-        for option in player_options:
-            stream_url, stream_headers = await loop.run_in_executor(None, resolve_gofilmes_stream, option['url'])
-            if stream_url:
-                stream_name = option.get('name', 'GoFilmes')
-                # --- ALTERAÇÃO AQUI para usar a descrição vinda do gofilmes.py ---
-                stream_description = option.get('description', 'GoFilmes')
-
-                if 'mediafire.com' in stream_url:
-                    stream_name += " (Só no Navegador)"
-                
-                # O objeto do stream agora tem um campo "description" que será exibido no Stremio
-                stream_obj = {"name": stream_name, "description": stream_description, "url": stream_url}
-                # --- FIM DA ALTERAÇÃO ---
-
-                if stream_headers:
-                    stream_obj["behaviorHints"] = {"proxyHeaders": {"request": stream_headers}}
-                streams.append(stream_obj)
-        return streams
-    except Exception as e:
-        logging.error(f"Erro ao buscar em GoFilmes para {titles}: {e}")
-        return []
+# --- BLOCO COMENTADO (GOFILMES) ---
+# async def search_gofilmes_async(titles, type, season, episode):
+#     try:
+#         loop = asyncio.get_event_loop()
+#         player_options = await loop.run_in_executor(None, search_gofilmes, titles, type, season, episode)
+#         
+#         streams = []
+#         for option in player_options:
+#             stream_url, stream_headers = await loop.run_in_executor(None, resolve_gofilmes_stream, option['url'])
+#             if stream_url:
+#                 stream_name = option.get('name', 'GoFilmes')
+#                 # --- ALTERAÇÃO AQUI para usar a descrição vinda do gofilmes.py ---
+#                 stream_description = option.get('description', 'GoFilmes')
+# 
+#                 if 'mediafire.com' in stream_url:
+#                     stream_name += " (Só no Navegador)"
+#                 
+#                 # O objeto do stream agora tem um campo "description" que será exibido no Stremio
+#                 stream_obj = {"name": stream_name, "description": stream_description, "url": stream_url}
+#                 # --- FIM DA ALTERAÇÃO ---
+# 
+#                 if stream_headers:
+#                     stream_obj["behaviorHints"] = {"proxyHeaders": {"request": stream_headers}}
+#                 streams.append(stream_obj)
+#         return streams
+#     except Exception as e:
+#         logging.error(f"Erro ao buscar em GoFilmes para {titles}: {e}")
+#         return []
+# ----------------------------------
 
 @app.get("/stream/{type}/{id}.json")
 @limiter.limit(rate_limit)
@@ -144,7 +146,7 @@ async def stream(type: str, id: str, request: Request):
     results = await asyncio.gather(
         search_serve_async(imdb_id, type, season, episode),
         search_link_async(id),
-        search_gofilmes_async(titles, type, season, episode)
+        # search_gofilmes_async(titles, type, season, episode) # <--- COMENTADO DA EXECUÇÃO
     )
 
     # Junta os resultados de todas as fontes
