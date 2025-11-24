@@ -11,13 +11,14 @@ import os
 import json
 import logging
 import asyncio
+from typing import Optional, Tuple, List, Any
 
-# Importações dos seus módulos
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
 from netcine import catalog_search, search_link, search_term
-# from gofilmes import search_gofilmes, resolve_stream as resolve_gofilmes_stream  # <--- COMENTADO
-from serve import search_serve
+#from serve import search_serve
 
-VERSION = "0.0.3" # Versão atualizada com otimizações
+VERSION = "0.0.4" 
 MANIFEST = {
     "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
     "description": "Sua fonte para filmes e séries.",
@@ -30,16 +31,17 @@ MANIFEST = {
 templates = Environment(loader=FileSystemLoader("templates"))
 limiter = Limiter(key_func=get_remote_address)
 rate_limit = '5/second'
-# A inicialização do FastAPI foi alterada para remover o 'lifespan'
+
 app = FastAPI()
 
-logging.basicConfig(level=logging.INFO)
+
+skyflixapi  = "https://da5f663b4690-skyflixfork14.baby-beamup.club"
 
 @app.exception_handler(RateLimitExceeded)
-async def rate_limit_handler(request, exc):
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(content={"error": "Too many requests"}, status_code=429)
 
-def add_cors(response: Response):
+def add_cors(response: Response) -> Response:
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -50,11 +52,18 @@ def add_cors(response: Response):
 @limiter.limit(rate_limit)
 async def home(request: Request):
     template = templates.get_template("index.html")
-    return add_cors(HTMLResponse(template.render(name=MANIFEST['name'], types=MANIFEST['types'], logo=MANIFEST['logo'], description=MANIFEST['description'], version=MANIFEST['version'])))
+    response_content = template.render(
+        name=MANIFEST['name'], 
+        types=MANIFEST['types'], 
+        logo=MANIFEST['logo'], 
+        description=MANIFEST['description'], 
+        version=MANIFEST['version']
+    )
+    return add_cors(HTMLResponse(response_content))
 
 @app.get("/manifest.json")
 @limiter.limit(rate_limit)
-async def manifest(request: Request):
+async def manifest_endpoint(request: Request):
     return add_cors(JSONResponse(content=MANIFEST))
 
 @app.get("/catalog/{type}/fenixflix/search={query}.json")
@@ -67,57 +76,72 @@ async def search(type: str, query: str, request: Request):
 @app.get("/meta/{type}/{id}.json")
 @limiter.limit(rate_limit)
 async def meta(type: str, id: str, request: Request):
-    # A lógica de metadados pode ser expandida aqui, se necessário.
     return add_cors(JSONResponse(content={"meta": {}}))
 
 
-# Funções de busca assíncronas para serem executadas em paralelo
-async def search_serve_async(imdb_id, content_type, season, episode):
+
+async def search_term_async(imdb_id: str) -> Tuple[List[str], Optional[str]]:
+   
     try:
         loop = asyncio.get_event_loop()
-        # Executa a função síncrona num executor para não bloquear o loop de eventos
-        return await loop.run_in_executor(None, search_serve, imdb_id, content_type, season, episode)
+        titles, year = await loop.run_in_executor(None, search_term, imdb_id)
+        return titles, year
     except Exception as e:
-        logging.error(f"Erro ao buscar em JSON local para {imdb_id}: {e}")
-        return []
+        return [], None
 
-async def search_link_async(id):
+async def search_serve_async(imdb_id: str, content_type: str, season: Optional[int], episode: Optional[int]):
     try:
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, search_link, id)
+        streams = await loop.run_in_executor(None, search_serve, imdb_id, content_type, season, episode)
+        return streams
     except Exception as e:
-        logging.error(f"Erro ao buscar em Netcine para {id}: {e}")
         return []
 
-# --- BLOCO COMENTADO (GOFILMES) ---
-# async def search_gofilmes_async(titles, type, season, episode):
-#     try:
-#         loop = asyncio.get_event_loop()
-#         player_options = await loop.run_in_executor(None, search_gofilmes, titles, type, season, episode)
-#         
-#         streams = []
-#         for option in player_options:
-#             stream_url, stream_headers = await loop.run_in_executor(None, resolve_gofilmes_stream, option['url'])
-#             if stream_url:
-#                 stream_name = option.get('name', 'GoFilmes')
-#                 # --- ALTERAÇÃO AQUI para usar a descrição vinda do gofilmes.py ---
-#                 stream_description = option.get('description', 'GoFilmes')
-# 
-#                 if 'mediafire.com' in stream_url:
-#                     stream_name += " (Só no Navegador)"
-#                 
-#                 # O objeto do stream agora tem um campo "description" que será exibido no Stremio
-#                 stream_obj = {"name": stream_name, "description": stream_description, "url": stream_url}
-#                 # --- FIM DA ALTERAÇÃO ---
-# 
-#                 if stream_headers:
-#                     stream_obj["behaviorHints"] = {"proxyHeaders": {"request": stream_headers}}
-#                 streams.append(stream_obj)
-#         return streams
-#     except Exception as e:
-#         logging.error(f"Erro ao buscar em GoFilmes para {titles}: {e}")
-#         return []
-# ----------------------------------
+async def search_link_async(id: str):
+    try:
+        loop = asyncio.get_event_loop()
+        streams = await loop.run_in_executor(None, search_link, id)
+        
+        for stream_item in streams:
+            original_description = stream_item.get('description', 'Stream VOD').lower()
+            audio_tag = ""
+
+            if "dublado" in original_description or "dub" in original_description:
+                audio_tag = " (Dublado)"
+            elif "legendado" in original_description or "leg" in original_description:
+                audio_tag = " (Legendado)"
+
+            stream_item['name'] = "FENIXFLIX"
+            stream_item['description'] = f"NC{audio_tag}"
+            
+        return streams
+    except Exception as e:
+        return []
+
+async def search_skyflix_async(content_type: str, content_id: str):
+    streams = []
+    url = f"{skyflixapi}/stream/{content_type}/{content_id}.json"
+    try:
+        loop = asyncio.get_event_loop()
+        
+        fetch_data = lambda: requests.get(url, timeout=10)
+        response = await loop.run_in_executor(None, fetch_data)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'streams' in data:
+                streams = data['streams']
+                for stream_item in streams:
+                    original_description = stream_item.get('description', 'Stream VOD').lower()
+
+                    stream_item['name'] = "FENIXFLIX"
+                    stream_item['description'] = f"Skyflix API"
+                
+    except requests.exceptions.Timeout:
+       pass
+    except Exception as e:
+       pass 
+    return streams
 
 @app.get("/stream/{type}/{id}.json")
 @limiter.limit(rate_limit)
@@ -136,22 +160,19 @@ async def stream(type: str, id: str, request: Request):
         except (IndexError, ValueError):
             return add_cors(JSONResponse(content={"streams": []}))
 
-    titles, _ = search_term(imdb_id)
-    if not titles:
-        # Se não encontrar títulos, ainda tenta a busca local
-        local_streams = await search_serve_async(imdb_id, type, season, episode)
-        return add_cors(JSONResponse(content={"streams": local_streams}))
-
-    # Executa todas as buscas em paralelo
-    results = await asyncio.gather(
+    titles, year = await search_term_async(imdb_id)
+    
+    searches = [
         search_serve_async(imdb_id, type, season, episode),
-        search_link_async(id),
-        # search_gofilmes_async(titles, type, season, episode) # <--- COMENTADO DA EXECUÇÃO
-    )
+        search_skyflix_async(type, id)
+    ]
 
-    # Junta os resultados de todas as fontes
-    all_streams = [stream for result in results for stream in result]
-        
+    if titles and year:
+        searches.append(search_link_async(id))
+
+    results = await asyncio.gather(*searches)
+
+    all_streams = [stream for result in results for stream in result]        
     return add_cors(JSONResponse(content={"streams": all_streams}))
 
 @app.options("/{path:path}")
