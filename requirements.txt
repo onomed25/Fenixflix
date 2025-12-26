@@ -4,6 +4,7 @@ jinja2
 slowapi
 requests
 beautifulsoup4
+cloudscraper
+playwright
 python-dotenv
-selenium
 fastapi-cache2[redis]
