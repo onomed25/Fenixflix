@@ -1,18 +1,24 @@
-# Use a imagem base oficial do Python
+# Usa uma imagem base do Python
 FROM python:3.9-slim
 
-# Defina o diretório de trabalho dentro do contêiner
+# Define o diretório de trabalho
 WORKDIR /app
 
-# Copie o arquivo de requisitos para o diretório de trabalho
-COPY requirements.txt .
+# Instala dependências do sistema necessárias para o Playwright e Python
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
 
-# Instale as dependências
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copie o conteúdo da aplicação para o diretório de trabalho
+# Copia os arquivos do projeto
 COPY . .
 
-# Exponha a porta em que a aplicação irá rodar
-EXPOSE 80
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80", "--workers=4", "--log-level", "debug"]
+# Instala as bibliotecas do Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# --- AQUI ESTÁ O COMANDO MÁGICO ---
+# Instala o Firefox e as dependências do sistema dele
+RUN playwright install --with-deps firefox
+
+# Comando para iniciar o site
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80"]
