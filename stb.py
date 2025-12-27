@@ -5,177 +5,205 @@ import json
 import unicodedata
 import asyncio
 from bs4 import BeautifulSoup
-# Playwright removido para economizar memória
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+
+# =========================
+# UTILIDADES
+# =========================
 
 def limpar_slug(texto):
-    if not texto: return ""
+    if not texto:
+        return ""
     texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
-    texto = texto.lower().strip().replace(":", "").replace("'", "").replace("!", "").replace("?", "").replace(".", "")
+    texto = texto.lower().strip()
+    texto = re.sub(r"[^\w\s-]", "", texto)
     return texto.replace(" ", "-")
 
 def limpar_titulo_imdb(texto):
-    if not texto: return None
-    texto = re.sub(r'\s\(\d{4}\).*', '', texto) 
-    texto = re.sub(r'\s-\sIMDb.*', '', texto) 
+    if not texto:
+        return None
+    texto = re.sub(r'\s\(\d{4}\).*', '', texto)
+    texto = re.sub(r'\s-\sIMDb.*', '', texto)
     return texto.strip()
 
+# =========================
+# IMDB
+# =========================
+
 def get_nomes_imdb(imdb_id):
-    nomes_candidatos = []
+    nomes = []
     url = f'https://www.imdb.com/pt/title/{imdb_id}/'
+
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+        'User-Agent': 'Mozilla/5.0',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
     }
-    
+
     try:
         r = requests.get(url, headers=headers, timeout=8)
         src = r.text
-        
-        title_matches = re.findall('<title>(.*?)</title>', src)
-        if title_matches:
-            raw_title = title_matches[0]
-            clean_title = limpar_titulo_imdb(raw_title)
-            if clean_title and clean_title not in nomes_candidatos:
-                nomes_candidatos.append(clean_title)
 
-        script_match = re.findall('json">(.*?)</script>', src, re.DOTALL)
-        if script_match:
-            data = json.loads(script_match[0])
-            name = data.get('name', '')
-            alternate = data.get('alternateName', '')
-            
-            if alternate and alternate not in nomes_candidatos:
-                nomes_candidatos.append(alternate)
-            if name and name not in nomes_candidatos:
-                nomes_candidatos.append(name)
-                
+        title = re.findall(r'<title>(.*?)</title>', src)
+        if title:
+            nome = limpar_titulo_imdb(title[0])
+            if nome:
+                nomes.append(nome)
+
+        script = re.findall(r'<script type="application/ld\+json">(.*?)</script>', src, re.DOTALL)
+        if script:
+            data = json.loads(script[0])
+            for campo in ("name", "alternateName"):
+                if campo in data and data[campo] not in nomes:
+                    nomes.append(data[campo])
+
     except Exception:
         pass
-    
-    return nomes_candidatos
 
-def obter_url_final(tipo, nome_slug, temporada=None, episodio=None):
-    if tipo == 'movie':
-        url_inicial = f"https://streamberry.com.br/filmes/{nome_slug}/"
+    return nomes
+
+# =========================
+# STREAMBERRY
+# =========================
+
+def obter_url_final(tipo, slug, temporada=None, episodio=None):
+    if tipo == "movie":
+        url = f"https://streamberry.com.br/filmes/{slug}/"
     else:
-        url_inicial = f"https://streamberry.com.br/episodios/{nome_slug}-{temporada}x{episodio}/"
-    
-    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
-    
+        url = f"https://streamberry.com.br/episodios/{slug}-{temporada}x{episodio}/"
+
+    scraper = cloudscraper.create_scraper()
+
     try:
-        resp = scraper.get(url_inicial, timeout=10)
-        
-        if resp.status_code != 200:
+        r = scraper.get(url, timeout=10)
+        if r.status_code != 200:
             return None
 
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        link_intermediario = None
-        
-        caixa_downloads = soup.find('div', id='download')
-        if caixa_downloads:
-            for link in caixa_downloads.find_all('a'):
-                href = link.get('href', '')
-                if "links/" in href:
-                    link_intermediario = href
-                    break
-        
-        if not link_intermediario:
-            for a in soup.find_all('a', href=True):
-                if '/links/' in a['href']:
-                    link_intermediario = a['href']
-                    break
+        soup = BeautifulSoup(r.text, "html.parser")
+        link = None
 
-        if not link_intermediario:
+        for a in soup.find_all("a", href=True):
+            if "/links/" in a["href"]:
+                link = a["href"]
+                break
+
+        if not link:
             return None
 
-        resp_final = scraper.get(link_intermediario)
-        url_final = resp_final.url
-        
-        if "/download/" in url_final:
-            return url_final.replace("/download/", "/d/")
-        return url_final
+        r2 = scraper.get(link, timeout=10)
+        final_url = r2.url
+
+        if "/download/" in final_url:
+            final_url = final_url.replace("/download/", "/d/")
+
+        return final_url
 
     except Exception:
         return None
 
-# Nova função LEVE substituindo o Playwright
-def buscar_m3u8_leve(url_alvo):
-    links = []
-    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
-    
-    try:
-        resp = scraper.get(url_alvo, timeout=15)
-        if resp.status_code == 200:
-            html = resp.text
-            
-            # Busca links .m3u8 usando regex no código fonte
-            matches = re.findall(r'(https?://[^\s"\'<>]+\.m3u8)', html)
-            
-            for m in matches:
-                m = m.replace('\\/', '/')
-                if m not in links:
-                    links.append(m)
-            
-            # Busca fallback em tags source
-            if not links:
-                soup = BeautifulSoup(html, 'html.parser')
-                for source in soup.find_all('source'):
-                    src = source.get('src')
-                    if src and '.m3u8' in src and src not in links:
-                        links.append(src)
+# =========================
+# PLAYWRIGHT (REUTILIZÁVEL)
+# =========================
 
-    except Exception as e:
-        print(f"Erro ao buscar m3u8: {e}")
+_playwright = None
+_browser = None
+
+async def get_browser():
+    global _playwright, _browser
+
+    if _browser is None:
+        _playwright = await async_playwright().start()
+        _browser = await _playwright.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+                "--disable-extensions"
+            ]
+        )
+    return _browser
+
+# =========================
+# BUSCAR M3U8 (PARA CEDO)
+# =========================
+
+async def buscar_m3u8(url):
+    browser = await get_browser()
+    context = await browser.new_context()
+    page = await context.new_page()
+
+    links = []
+
+    async def interceptar(response):
+        url_resp = response.url
+        if ".m3u8" in url_resp:
+            links.append(url_resp)
+            await page.close()  # PARA IMEDIATAMENTE
+
+    page.on("response", interceptar)
+
+    try:
+        await page.route(
+            "**/*",
+            lambda route: route.abort()
+            if route.request.resource_type in ["image", "font", "media"]
+            else route.continue_()
+        )
+
+        await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+        await page.wait_for_timeout(3000)
+
+    except (PlaywrightTimeout, Exception):
         pass
-        
+
+    await context.close()
     return links
+
+# =========================
+# FUNÇÃO PRINCIPAL
+# =========================
 
 async def search_streamberry(imdb_id, tipo, nome_original, temporada=None, episodio=None):
     loop = asyncio.get_running_loop()
-    
-    if tipo == 'movie':
-        lista_nomes = await loop.run_in_executor(None, get_nomes_imdb, imdb_id)
-    else:
-        lista_nomes = await loop.run_in_executor(None, get_nomes_imdb, imdb_id)
-    
-    if nome_original and nome_original not in lista_nomes:
-        lista_nomes.append(nome_original)
+    nomes = await loop.run_in_executor(None, get_nomes_imdb, imdb_id)
 
-    url_found = None
-    nome_sucesso = ""
+    if nome_original and nome_original not in nomes:
+        nomes.append(nome_original)
 
-    for nome in lista_nomes:
+    for nome in nomes:
         slug = limpar_slug(nome)
-        if len(slug) < 2: continue
-        
-        url_player = await loop.run_in_executor(None, obter_url_final, tipo, slug, temporada, episodio)
-        
-        if url_player:
-            url_found = url_player
-            nome_sucesso = nome
-            break
-        
-    if not url_found:
-        return []
+        if len(slug) < 2:
+            continue
 
-    # Usa a função leve em vez do firefox pesado
-    links = await loop.run_in_executor(None, buscar_m3u8_leve, url_found)
-    
-    streams = []
-    for link in links:
-        if tipo == 'movie':
-            titulo_display = f"Filme - {nome_sucesso}"
-        else:
-            titulo_display = f"S{temporada}E{episodio} - {nome_sucesso}"
+        url_player = await loop.run_in_executor(
+            None,
+            obter_url_final,
+            tipo,
+            slug,
+            temporada,
+            episodio
+        )
 
-        streams.append({
-            "name": "FenixFlix",
-            "title": titulo_display,
-            "url": link,
-            "behaviorHints": {
-                "bingeGroup": "streamberry-vip",
-                "notWebReady": True
-            }
-        })
-    
-    return streams
+        if not url_player:
+            continue
+
+        links = await buscar_m3u8(url_player)
+
+        if links:
+            titulo = (
+                f"Filme - {nome}"
+                if tipo == "movie"
+                else f"S{temporada}E{episodio} - {nome}"
+            )
+
+            return [{
+                "name": "FenixFlix",
+                "title": titulo,
+                "url": links[0],
+                "behaviorHints": {
+                    "bingeGroup": "streamberry-vip",
+                    "notWebReady": True
+                }
+            }]
+
+    return []
