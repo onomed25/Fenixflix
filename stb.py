@@ -5,15 +5,102 @@ import json
 import unicodedata
 import asyncio
 from bs4 import BeautifulSoup
-# Remova ou comente a linha do playwright para não gastar memória importando
-# from playwright.async_api import async_playwright 
+# Playwright removido para economizar memória
 
-# ... (mantenha as funções limpar_slug, limpar_titulo_imdb, get_nomes_imdb, obter_url_final iguais) ...
+def limpar_slug(texto):
+    if not texto: return ""
+    texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
+    texto = texto.lower().strip().replace(":", "").replace("'", "").replace("!", "").replace("?", "").replace(".", "")
+    return texto.replace(" ", "-")
 
-# NOVA FUNÇÃO LEVE (Substitui o Playwright)
+def limpar_titulo_imdb(texto):
+    if not texto: return None
+    texto = re.sub(r'\s\(\d{4}\).*', '', texto) 
+    texto = re.sub(r'\s-\sIMDb.*', '', texto) 
+    return texto.strip()
+
+def get_nomes_imdb(imdb_id):
+    nomes_candidatos = []
+    url = f'https://www.imdb.com/pt/title/{imdb_id}/'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+    }
+    
+    try:
+        r = requests.get(url, headers=headers, timeout=8)
+        src = r.text
+        
+        title_matches = re.findall('<title>(.*?)</title>', src)
+        if title_matches:
+            raw_title = title_matches[0]
+            clean_title = limpar_titulo_imdb(raw_title)
+            if clean_title and clean_title not in nomes_candidatos:
+                nomes_candidatos.append(clean_title)
+
+        script_match = re.findall('json">(.*?)</script>', src, re.DOTALL)
+        if script_match:
+            data = json.loads(script_match[0])
+            name = data.get('name', '')
+            alternate = data.get('alternateName', '')
+            
+            if alternate and alternate not in nomes_candidatos:
+                nomes_candidatos.append(alternate)
+            if name and name not in nomes_candidatos:
+                nomes_candidatos.append(name)
+                
+    except Exception:
+        pass
+    
+    return nomes_candidatos
+
+def obter_url_final(tipo, nome_slug, temporada=None, episodio=None):
+    if tipo == 'movie':
+        url_inicial = f"https://streamberry.com.br/filmes/{nome_slug}/"
+    else:
+        url_inicial = f"https://streamberry.com.br/episodios/{nome_slug}-{temporada}x{episodio}/"
+    
+    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
+    
+    try:
+        resp = scraper.get(url_inicial, timeout=10)
+        
+        if resp.status_code != 200:
+            return None
+
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        link_intermediario = None
+        
+        caixa_downloads = soup.find('div', id='download')
+        if caixa_downloads:
+            for link in caixa_downloads.find_all('a'):
+                href = link.get('href', '')
+                if "links/" in href:
+                    link_intermediario = href
+                    break
+        
+        if not link_intermediario:
+            for a in soup.find_all('a', href=True):
+                if '/links/' in a['href']:
+                    link_intermediario = a['href']
+                    break
+
+        if not link_intermediario:
+            return None
+
+        resp_final = scraper.get(link_intermediario)
+        url_final = resp_final.url
+        
+        if "/download/" in url_final:
+            return url_final.replace("/download/", "/d/")
+        return url_final
+
+    except Exception:
+        return None
+
+# Nova função LEVE substituindo o Playwright
 def buscar_m3u8_leve(url_alvo):
     links = []
-    # Cria um scraper que simula um navegador, mas sem abrir janela (muito leve)
     scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
     
     try:
@@ -21,17 +108,15 @@ def buscar_m3u8_leve(url_alvo):
         if resp.status_code == 200:
             html = resp.text
             
-            # Tenta encontrar links .m3u8 diretamente no texto (regex)
-            # Procura por strings que começam com http e terminam com .m3u8
+            # Busca links .m3u8 usando regex no código fonte
             matches = re.findall(r'(https?://[^\s"\'<>]+\.m3u8)', html)
             
             for m in matches:
-                # Às vezes o link vem com barras escapadas (\/), precisamos corrigir
                 m = m.replace('\\/', '/')
                 if m not in links:
                     links.append(m)
-                    
-            # Se não achou com regex simples, tenta procurar dentro de tags source (caso use player HTML5 padrão)
+            
+            # Busca fallback em tags source
             if not links:
                 soup = BeautifulSoup(html, 'html.parser')
                 for source in soup.find_all('source'):
@@ -47,9 +132,6 @@ def buscar_m3u8_leve(url_alvo):
 
 async def search_streamberry(imdb_id, tipo, nome_original, temporada=None, episodio=None):
     loop = asyncio.get_running_loop()
-    
-    # ... (mantenha a lógica de busca de nomes igual) ...
-    # (Copie a parte inicial da função original até o "if not url_found: return []")
     
     if tipo == 'movie':
         lista_nomes = await loop.run_in_executor(None, get_nomes_imdb, imdb_id)
@@ -76,10 +158,8 @@ async def search_streamberry(imdb_id, tipo, nome_original, temporada=None, episo
     if not url_found:
         return []
 
-    # --- AQUI É A MUDANÇA PRINCIPAL ---
-    # Em vez de chamar o firefox, chamamos a função leve no executor
+    # Usa a função leve em vez do firefox pesado
     links = await loop.run_in_executor(None, buscar_m3u8_leve, url_found)
-    # ----------------------------------
     
     streams = []
     for link in links:
