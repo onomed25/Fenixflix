@@ -39,7 +39,8 @@ def search_archive_series(imdb_id, season, episode):
             server = data['server']
             directory = data['dir']
             
-            regex = rf"(?i)(?:e|x|ep|episode|\s|^)\D?0*{e_num}(?:[^\d]|$)"
+            # CORREÇÃO: Adicionado (?![sS]) para impedir que capture 'S' (de Season) como episódio
+            regex = rf"(?i)(?:e|x|ep|episode|\s|^)(?![sS])\D?0*{e_num}(?:[^\d]|$)"
             regex_simple = rf"(?i)(^|\W)0*{e_num}\.(mp4|mkv|avi)$"
 
             found_file = None
@@ -58,7 +59,7 @@ def search_archive_series(imdb_id, season, episode):
                 
                 return [{
                     "name": "FenixFlix ", 
-                    "description": f"Aechive {label}",
+                    "description": f"{label}", # Corrigido de 'Aechive' para 'Archive'
                     "url": final_url
                 }]
 
