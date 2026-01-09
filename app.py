@@ -1,27 +1,22 @@
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from jinja2 import Environment, FileSystemLoader 
 import asyncio
-import serve   # Mantido (antigo)
-import archive # Mantido (novo com Session)
-# import stb removido
+import uvicorn
+import serve   
+import archive 
+import justwatch
 
-VERSION = "1.0.2" # Incrementei a versão
-MANIFEST = {
-    "id": "com.fenixflix", 
-    "version": VERSION, 
-    "name": "FENIXFLIX",
-    "description": "Sua fonte para filmes e séries.",
-    "logo": "https://i.imgur.com/9SKgxfU.png", 
-    "resources": ["stream"],
-    "types": ["movie", "series"], 
-    "catalogs": [], 
-    "idPrefixes": ["fenixflix", "tt"]
-}
+VERSION = "1.0.1"
 
-templates = Environment(loader=FileSystemLoader("templates"))
+FIXED_CATALOGS = [
+    {"type": "movie", "id": "jw_popular", "name": "Populares (Fenix)"},
+    {"type": "series", "id": "jw_popular", "name": "Populares (Fenix)"}
+]
+
+templates = Jinja2Templates(directory="templates")
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
 
@@ -31,38 +26,62 @@ def add_cors(response: Response) -> Response:
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
+def get_manifest(config_str: str = None):
+    return {
+        "id": "com.fenixflix", 
+        "version": VERSION, 
+        "name": "FENIXFLIX",
+        "description": "Filmes e Séries Populares",
+        "logo": "https://i.imgur.com/9SKgxfU.png", 
+      
+        "resources": ["stream", "catalog", "meta"], 
+        "types": ["movie", "series"], 
+        "catalogs": FIXED_CATALOGS, 
+        "idPrefixes": ["tt", "tmdb"] 
+    }
+
 @app.get("/")
 async def root(request: Request):
-    template = templates.get_template("index.html")
-    return HTMLResponse(content=template.render(manifest=MANIFEST, version=VERSION))
+    manifest_data = get_manifest(None)
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "manifest": manifest_data,
+        "version": VERSION
+    })
 
 @app.get("/manifest.json")
 async def manifest_endpoint():
-    return add_cors(JSONResponse(content=MANIFEST))
+    return add_cors(JSONResponse(content=get_manifest(None)))
 
-# Removi a função get_cinemeta_name e client_session pois só eram usadas pelo STB
+@app.get("/providers={config_str}/manifest.json")
+async def manifest_config_endpoint(config_str: str):
+    return add_cors(JSONResponse(content=get_manifest(config_str)))
 
-async def search_serve_async(imdb_id, content_type, season, episode):
-    try:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, serve.search_serve, imdb_id, content_type, season, episode)
-    except:
-        return []
+@app.get("/catalog/{type}/{id}.json")
+@app.get("/providers={config_str}/catalog/{type}/{id}.json")
+async def catalog_endpoint(type: str, id: str, config_str: str = None):
+    if id == "jw_popular":
+        metas = await asyncio.to_thread(justwatch.fetch_catalog, "popular", type)
+        return add_cors(JSONResponse(content={"metas": metas}))
+    return add_cors(JSONResponse(content={"metas": []}))
 
-async def search_archive_async(imdb_id, content_type, season, episode):
-    try:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, archive.search_serve, imdb_id, content_type, season, episode)
-    except:
-        return []
+
+@app.get("/meta/{type}/{id}.json")
+@app.get("/providers={config_str}/meta/{type}/{id}.json")
+async def meta_endpoint(type: str, id: str, config_str: str = None):
+
+    meta = await asyncio.to_thread(justwatch.fetch_meta, id, type)
+    
+    if meta:
+        return add_cors(JSONResponse(content={"meta": meta}))
+  
+    return add_cors(JSONResponse(content={"meta": None})) 
 
 @app.get("/stream/{type}/{id}.json")
-@limiter.limit("5/minute")
-async def stream(type: str, id: str, request: Request):
-    if type not in ["movie", "series"]:
-        return add_cors(JSONResponse(content={"streams": []}))
-
-    imdb_id = id.split(':')[0]
+@app.get("/providers={config_str}/stream/{type}/{id}.json")
+@limiter.limit("10/minute")
+async def stream(type: str, id: str, request: Request, config_str: str = None):
+    clean_id = id.split(':')[0] 
     season, episode = None, None
 
     if type == 'series':
@@ -70,21 +89,21 @@ async def stream(type: str, id: str, request: Request):
             parts = id.split(':')
             season = int(parts[1])
             episode = int(parts[2])
-        except:
-            return add_cors(JSONResponse(content={"streams": []}))
+        except: pass
 
     final_streams = []
-
-    # 1. Busca no Serve (Antigo)
-    serve_streams = await search_serve_async(imdb_id, type, season, episode)
-    if serve_streams:
-        final_streams.extend(serve_streams)
-
-    # 2. Busca no Archive (Novo)
-    archive_streams = await search_archive_async(imdb_id, type, season, episode)
-    if archive_streams:
-        final_streams.extend(archive_streams)
     
-    # 3. STB removido
+    try:
+        serve_streams = await asyncio.to_thread(serve.search_serve, clean_id, type, season, episode)
+        if serve_streams: final_streams.extend(serve_streams)
+    except: pass
+
+    try:
+        archive_streams = await asyncio.to_thread(archive.search_serve, clean_id, type, season, episode)
+        if archive_streams: final_streams.extend(archive_streams)
+    except: pass
     
     return add_cors(JSONResponse(content={"streams": final_streams}))
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
