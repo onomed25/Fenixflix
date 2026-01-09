@@ -54,6 +54,7 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
                 logger.error(f"Erro ao processar streams de séries: {e}")
                 return []
         
+        # --- ALTERAÇÃO AQUI PARA FILMES ---
         elif content_type == 'movie':
             potential_streams = local_data.get('streams', [])
             for stream_obj in potential_streams:
@@ -61,12 +62,13 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
                     streams_formatados.append({
                         "name": stream_obj.get("name", "FenixFlix"),
                         "url": stream_obj.get("url"),
-                        "description": stream_obj.get("description")
+                        "description": "Dublado" 
                     })
                  elif isinstance(stream_obj, str):
                     streams_formatados.append({
                         "name": "FenixFlix",
-                        "url": stream_obj
+                        "url": stream_obj,
+                        "description": "Dublado"
                     })
             return streams_formatados
 
