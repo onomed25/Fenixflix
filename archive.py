@@ -103,7 +103,7 @@ def search_archive_series(imdb_id, season, episode):
                 
                 return [{
                     "name": "FenixFlix", 
-                    "description": f"Archive | {label}",
+                    "description": f"{label}",
                     "url": final_url
                 }]
         except:
