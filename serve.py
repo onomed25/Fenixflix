@@ -7,20 +7,14 @@ logger = logging.getLogger(__name__)
 session = requests.Session()
 
 def search_serve(imdb_id, content_type, season=None, episode=None):
-    """
-    Busca streams usando uma Sessão persistente para ser mais rápido
-    nas requisições seguintes.
-    """
+
     url = f"http://217.160.125.125:13435/{imdb_id}.json"
     
     try:
-      
         response = session.get(url, timeout=4)
-        
         response.raise_for_status()
         local_data = response.json()
 
-        
         if local_data.get('id') != imdb_id:
             logger.warning(f"ID do IMDB não corresponde no JSON para {imdb_id}.")
             return []
@@ -33,20 +27,22 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
                 episode_str = str(episode)
 
                 streams_data = local_data.get('streams', {})
-        
                 stream_objects = streams_data.get(season_str, {}).get(episode_str, [])
 
                 for stream_obj in stream_objects:
                     if isinstance(stream_obj, dict):
+                        label = stream_obj.get("name") or "Dublado"
+                        
                         streams_formatados.append({
                             "name": "FenixFlix",
                             "url": stream_obj.get("url"),
-                            "description": stream_obj.get("description", "Player Padrão")
+                            "description": label 
                         })
                     elif isinstance(stream_obj, str):
                         streams_formatados.append({
                             "name": "FenixFlix",
-                            "url": stream_obj
+                            "url": stream_obj,
+                            "description": "Dublado"
                         })
                 return streams_formatados
                 
@@ -54,15 +50,16 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
                 logger.error(f"Erro ao processar streams de séries: {e}")
                 return []
         
-        # --- ALTERAÇÃO AQUI PARA FILMES ---
         elif content_type == 'movie':
             potential_streams = local_data.get('streams', [])
             for stream_obj in potential_streams:
                  if isinstance(stream_obj, dict):
+                    label = stream_obj.get("name") or "Dublado"
+
                     streams_formatados.append({
-                        "name": stream_obj.get("name", "FenixFlix"),
+                        "name": "FenixFlix",
                         "url": stream_obj.get("url"),
-                        "description": "Dublado" 
+                        "description": label
                     })
                  elif isinstance(stream_obj, str):
                     streams_formatados.append({
