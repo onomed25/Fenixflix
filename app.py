@@ -93,15 +93,20 @@ async def stream(type: str, id: str, request: Request, config_str: str = None):
 
     final_streams = []
     
-    try:
-        serve_streams = await asyncio.to_thread(serve.search_serve, clean_id, type, season, episode)
-        if serve_streams: final_streams.extend(serve_streams)
-    except: pass
+    task_serve = asyncio.to_thread(serve.search_serve, clean_id, type, season, episode)
+    task_archive = asyncio.to_thread(archive.search_serve, clean_id, type, season, episode)
+    
+    resultados = await asyncio.gather(task_serve, task_archive, return_exceptions=True)
+    
+    serve_streams = resultados[0]
+    archive_streams = resultados[1]
 
-    try:
-        archive_streams = await asyncio.to_thread(archive.search_serve, clean_id, type, season, episode)
-        if archive_streams: final_streams.extend(archive_streams)
-    except: pass
+    if isinstance(serve_streams, list) and serve_streams:
+        final_streams.extend(serve_streams)
+        
+    if isinstance(archive_streams, list) and archive_streams:
+        final_streams.extend(archive_streams)
+
     
     return add_cors(JSONResponse(content={"streams": final_streams}))
 

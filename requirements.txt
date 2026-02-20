@@ -8,3 +8,4 @@ cloudscraper
 playwright
 python-dotenv
 fastapi-cache2[redis]
+httpx
