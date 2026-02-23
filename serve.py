@@ -31,7 +31,7 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
 
                 for stream_obj in stream_objects:
                     if isinstance(stream_obj, dict):
-                        label = stream_obj.get("name") or "Dublado"
+                        label = stream_obj.get("name") or stream_obj.get("description") or "Dublado"
                         
                         streams_formatados.append({
                             "name": "FenixFlix",
@@ -54,7 +54,7 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
             potential_streams = local_data.get('streams', [])
             for stream_obj in potential_streams:
                  if isinstance(stream_obj, dict):
-                    label = stream_obj.get("name") or "Dublado"
+                     label = stream_obj.get("name") or stream_obj.get("description") or "Dublado"
 
                     streams_formatados.append({
                         "name": "FenixFlix",
