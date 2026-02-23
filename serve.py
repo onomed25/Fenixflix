@@ -31,14 +31,12 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
 
                 for stream_obj in stream_objects:
                     if isinstance(stream_obj, dict):
-                        # Captura o name e description reais do JSON
-                        nome = stream_obj.get("name") or "FenixFlix"
-                        descricao = stream_obj.get("description") or "Dublado"
+                        label = stream_obj.get("name") or "Dublado"
                         
                         streams_formatados.append({
-                            "name": nome,
+                            "name": "FenixFlix",
                             "url": stream_obj.get("url"),
-                            "description": descricao 
+                            "description": label 
                         })
                     elif isinstance(stream_obj, str):
                         streams_formatados.append({
@@ -56,14 +54,12 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
             potential_streams = local_data.get('streams', [])
             for stream_obj in potential_streams:
                  if isinstance(stream_obj, dict):
-                    # Captura o name e description reais do JSON
-                    nome = stream_obj.get("name") or "FenixFlix"
-                    descricao = stream_obj.get("description") or "Dublado"
+                    label = stream_obj.get("name") or "Dublado"
 
                     streams_formatados.append({
-                        "name": nome,
+                        "name": "FenixFlix",
                         "url": stream_obj.get("url"),
-                        "description": descricao
+                        "description": label
                     })
                  elif isinstance(stream_obj, str):
                     streams_formatados.append({
