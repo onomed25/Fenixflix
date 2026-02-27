@@ -94,3 +94,20 @@ def fetch_catalog(provider_key, content_type="movie", country="BR"):
         if metas: save_to_cache(cache_name, metas)
         return metas
     except: return []
+
+def fetch_meta(imdb_id, content_type):
+    """
+    Obtém os metadados para um ID específico.
+    Primeiro tenta encontrá-lo na cache local gerada pelo catálogo.
+    """
+    country = "BR" # Predefinição para BR, conforme usado no fetch_catalog
+    cache_name = f"popular_{content_type}_{country}.json"
+    
+    cached_data = get_cached_data(cache_name, CATALOG_CACHE_TIME)
+    
+    if cached_data:
+        for item in cached_data:
+            if item.get("id") == imdb_id:
+                return item
+                
+    return None
