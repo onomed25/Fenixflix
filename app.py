@@ -147,6 +147,15 @@ async def stream(type: str, id: str, request: Request):
 
                     if m3u8_extraido:
                         stream_info["url"] = m3u8_extraido
+                        stream_info["behaviorHints"] = {
+                            "notWebReady": True,
+                            "proxyHeaders": {
+                                "request": {
+                                    "Referer": "https://streamberry.com.br/",
+                                    "Origin": "https://streamberry.com.br"
+                                }
+                            }
+                        }
                         final_streams.append(stream_info)
                 else:
                     final_streams.append(stream_info)
