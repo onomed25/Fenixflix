@@ -1,16 +1,14 @@
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import asyncio
-import aiohttp
+import httpx
 import uvicorn
 import inspect
 import unicodedata
 import re
-
-from playwright.async_api import async_playwright
 
 import serve
 import archive
@@ -37,54 +35,23 @@ def slugify(text):
     text = re.sub(r'[^a-z0-9]+', '-', text)
     return text.strip('-')
 
-async def extrair_m3u8_streamberry(url_video, referer_site="https://streamberry.com.br/"):
-    link_m3u8 = None
-
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
-
-        page = await context.new_page()
-
-        await page.set_extra_http_headers({
-            "Referer": referer_site,
-            "Origin": referer_site.rstrip('/'),
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
-        })
-
-        async def capturar_rede(request):
-            nonlocal link_m3u8
-            url = request.url
-            if ".m3u8" in url and ("master" in url or "index" in url) and not link_m3u8:
-                link_m3u8 = url
-
-        page.on("request", capturar_rede)
-
-        try:
-            await page.goto(url_video, wait_until="load", timeout=30000)
-
-            for i in range(15): 
-                if link_m3u8:
-                    break
-                await asyncio.sleep(1)
-
-        except Exception:
-            pass
-        finally:
-            await browser.close()
-
-    return link_m3u8
+# Nova função: apenas pede para o Go!
+async def extrair_m3u8_streamberry(url_video):
+    video_id = url_video.split('/')[-1]
+    try:
+        async with httpx.AsyncClient(timeout=35.0) as client:
+            resposta = await client.get(f"http://127.0.0.1:8080/extract?id={video_id}")
+            if resposta.status_code == 200:
+                dados = resposta.json()
+                if dados.get("m3u8"):
+                    return dados["m3u8"]
+    except Exception:
+        pass
+    return None
 
 @app.get("/")
 async def root():
-    return {
-        "status": "online",
-        "addon": "FENIXFLIX",
-        "version": VERSION
-    }
+    return {"status": "online", "addon": "FENIXFLIX", "version": VERSION}
 
 @app.get("/manifest.json")
 async def manifest_endpoint():
@@ -92,7 +59,7 @@ async def manifest_endpoint():
         "id": "com.fenixflix",
         "version": VERSION,
         "name": "FENIXFLIX",
-        "description": "Filmes e Séries via Archive & Bysebuho",
+        "description": "Filmes e Séries via Archive & Bysebuho (Go Powered)",
         "resources": ["stream", "catalog", "meta"],
         "types": ["movie", "series"],
         "catalogs": [
@@ -124,26 +91,22 @@ async def stream(type: str, id: str, request: Request):
     ]
 
     resultados = await asyncio.gather(*tasks, return_exceptions=True)
-
     final_streams = []
-    
+
     for res in resultados:
         if isinstance(res, list):
             for stream_info in res:
                 url = stream_info.get("url", "")
-                
+
                 if url and not url.startswith("http"):
                     url_do_embed = f"https://byseraguci.com/e/{url}"
                     m3u8_extraido = await extrair_m3u8_streamberry(url_do_embed)
-                    
+
                     if m3u8_extraido:
                         stream_info["url"] = m3u8_extraido
                         final_streams.append(stream_info)
                 else:
                     final_streams.append(stream_info)
-                    
-        elif isinstance(res, Exception):
-            pass
 
     return JSONResponse(content={"streams": final_streams})
 
