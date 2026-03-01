@@ -83,7 +83,12 @@ func handleExtract(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	// O navegador já vai ser instalado pelo Docker, então só iniciamos o servidor
+	// Isso tenta instalar o driver e o browser se eles não existirem
+	err := playwright.Install()
+	if err != nil {
+		fmt.Printf("[GO] Aviso ao instalar Playwright: %v\n", err)
+	}
+	
 	http.HandleFunc("/extract", handleExtract)
 	fmt.Println("[GO] Servidor extrator rodando na porta 8080...")
 	http.ListenAndServe(":8080", nil)
