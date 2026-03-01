@@ -1,35 +1,20 @@
-# Estágio 1: Compilar o binário Go (Atualizado para 1.22)
-FROM golang:1.22-bullseye AS go-builder
-WORKDIR /app
-COPY main.go .
-# Cria o módulo e compila o extrator
-RUN go mod init fenix-extractor && go mod tidy
-RUN go build -o fenix-extractor main.go
+# Usa uma imagem do Python como base
+FROM python:3.10-bullseye
 
-# Estágio 2: Ambiente Python (Final)
-FROM python:3.10-slim-bullseye
+# Define o diretório de trabalho no servidor
 WORKDIR /app
 
-# Instalar dependências de sistema necessárias
-RUN apt-get update && apt-get install -y \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copiar o binário do Go do estágio anterior
-COPY --from=go-builder /app/fenix-extractor /app/fenix-extractor
-
-# Copiar os ficheiros do projeto
+# Copia todos os ficheiros do seu projeto para dentro do servidor
 COPY . .
 
-# Instalar dependências do Python
+# Instala as dependências do Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar navegadores e dependências do Playwright
+# Instala o navegador Chromium do Playwright para o Python
 RUN playwright install chromium --with-deps
 
-# Garantir permissões de execução
-RUN chmod +x start.sh /app/fenix-extractor
-
+# Libera a porta 8000 para a internet
 EXPOSE 8000
 
-CMD ["./start.sh"]
+# Inicia o servidor Python diretamente
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
