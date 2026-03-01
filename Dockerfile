@@ -1,38 +1,36 @@
-# Estágio 1: Compilar o binário Go
+# Estágio 1: Compilar o binário Go de forma simples
 FROM golang:1.21-bullseye AS go-builder
 WORKDIR /app
 COPY main.go .
-# Instala as dependências do Go e compila
+# Cria o módulo e compila o extrator
 RUN go mod init fenix-extractor && go mod tidy
 RUN go build -o fenix-extractor main.go
 
-# Estágio 2: Ambiente final com Python e Playwright
-FROM python:3.10-bullseye
+# Estágio 2: Ambiente Python (Final)
+FROM python:3.10-slim-bullseye
 WORKDIR /app
 
-# Instalar dependências de sistema para o Playwright
+# Instalar apenas o necessário para o Playwright rodar
 RUN apt-get update && apt-get install -y \
-    libicu-dev \
-    libvpx-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar o binário compilado do Go do estágio anterior
+# Copiar o binário do Go
 COPY --from=go-builder /app/fenix-extractor /app/fenix-extractor
 
-# Copiar os ficheiros do projeto Python
+# Copiar os ficheiros do projeto
 COPY . .
 
 # Instalar dependências do Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar navegadores do Playwright
+# Instalar o Chromium e as dependências de sistema do navegador
+# O comando --with-deps instala as bibliotecas que faltavam (libicu, libvpx, etc)
 RUN playwright install chromium --with-deps
 
-# Dar permissão de execução ao script e ao binário
+# Garantir permissões
 RUN chmod +x start.sh /app/fenix-extractor
 
-# Porta da API Python
 EXPOSE 8000
 
-# Usar o script de inicialização
 CMD ["./start.sh"]
