@@ -1,114 +1,160 @@
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import asyncio
+import aiohttp
 import uvicorn
-import serve   
-import archive 
+import inspect
+import unicodedata
+import re
+
+from playwright.async_api import async_playwright
+
+import serve
+import archive
 import justwatch
 
-VERSION = "1.0.1"
+VERSION = "1.0.3"
 
-FIXED_CATALOGS = [
-    {"type": "movie", "id": "jw_popular", "name": "Populares (Fenix)"},
-    {"type": "series", "id": "jw_popular", "name": "Populares (Fenix)"}
-]
-
-templates = Jinja2Templates(directory="templates")
-limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
 
-def add_cors(response: Response) -> Response:
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    return response
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def get_manifest(config_str: str = None):
-    return {
-        "id": "com.fenixflix", 
-        "version": VERSION, 
-        "name": "FENIXFLIX",
-        "description": "Filmes e Séries Populares",
-        "logo": "https://i.imgur.com/9SKgxfU.png", 
-      
-        "resources": ["stream", "catalog", "meta"], 
-        "types": ["movie", "series"], 
-        "catalogs": FIXED_CATALOGS, 
-        "idPrefixes": ["tt", "tmdb"] 
-    }
+limiter = Limiter(key_func=get_remote_address)
+
+def slugify(text):
+    if not text: return ""
+    text = str(text).lower()
+    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
+    text = re.sub(r'[^a-z0-9]+', '-', text)
+    return text.strip('-')
+
+async def extrair_m3u8_streamberry(url_video, referer_site="https://streamberry.com.br/"):
+    link_m3u8 = None
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
+
+        page = await context.new_page()
+
+        await page.set_extra_http_headers({
+            "Referer": referer_site,
+            "Origin": referer_site.rstrip('/'),
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+        })
+
+        async def capturar_rede(request):
+            nonlocal link_m3u8
+            url = request.url
+            if ".m3u8" in url and ("master" in url or "index" in url) and not link_m3u8:
+                link_m3u8 = url
+
+        page.on("request", capturar_rede)
+
+        try:
+            await page.goto(url_video, wait_until="load", timeout=30000)
+
+            for i in range(15): 
+                if link_m3u8:
+                    break
+                await asyncio.sleep(1)
+
+        except Exception:
+            pass
+        finally:
+            await browser.close()
+
+    return link_m3u8
 
 @app.get("/")
-async def root(request: Request):
-    manifest_data = get_manifest(None)
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "manifest": manifest_data,
+async def root():
+    return {
+        "status": "online",
+        "addon": "FENIXFLIX",
         "version": VERSION
-    })
+    }
 
 @app.get("/manifest.json")
 async def manifest_endpoint():
-    return add_cors(JSONResponse(content=get_manifest(None)))
-
-@app.get("/providers={config_str}/manifest.json")
-async def manifest_config_endpoint(config_str: str):
-    return add_cors(JSONResponse(content=get_manifest(config_str)))
-
-@app.get("/catalog/{type}/{id}.json")
-@app.get("/providers={config_str}/catalog/{type}/{id}.json")
-async def catalog_endpoint(type: str, id: str, config_str: str = None):
-    if id == "jw_popular":
-        metas = await asyncio.to_thread(justwatch.fetch_catalog, "popular", type)
-        return add_cors(JSONResponse(content={"metas": metas}))
-    return add_cors(JSONResponse(content={"metas": []}))
-
-
-@app.get("/meta/{type}/{id}.json")
-@app.get("/providers={config_str}/meta/{type}/{id}.json")
-async def meta_endpoint(type: str, id: str, config_str: str = None):
-
-    meta = await asyncio.to_thread(justwatch.fetch_meta, id, type)
-    
-    if meta:
-        return add_cors(JSONResponse(content={"meta": meta}))
-  
-    return add_cors(JSONResponse(content={"meta": None})) 
+    return JSONResponse(content={
+        "id": "com.fenixflix",
+        "version": VERSION,
+        "name": "FENIXFLIX",
+        "description": "Filmes e Séries via Archive & Bysebuho",
+        "resources": ["stream", "catalog", "meta"],
+        "types": ["movie", "series"],
+        "catalogs": [
+            {"type": "movie", "id": "popular", "name": "Populares (Fenix)"},
+            {"type": "series", "id": "popular", "name": "Populares (Fenix)"}
+        ],
+        "idPrefixes": ["tt", "tmdb"]
+    })
 
 @app.get("/stream/{type}/{id}.json")
-@app.get("/providers={config_str}/stream/{type}/{id}.json")
-@limiter.limit("10/minute")
-async def stream(type: str, id: str, request: Request, config_str: str = None):
-    clean_id = id.split(':')[0] 
+@limiter.limit("15/minute")
+async def stream(type: str, id: str, request: Request):
+    clean_id = id.split(':')[0]
     season, episode = None, None
-
     if type == 'series':
         try:
             parts = id.split(':')
-            season = int(parts[1])
-            episode = int(parts[2])
+            season, episode = int(parts[1]), int(parts[2])
         except: pass
+
+    def create_task(func, *args):
+        if inspect.iscoroutinefunction(func):
+            return func(*args)
+        return asyncio.to_thread(func, *args)
+
+    tasks = [
+        create_task(serve.search_serve, clean_id, type, season, episode),
+        create_task(archive.search_serve, clean_id, type, season, episode)
+    ]
+
+    resultados = await asyncio.gather(*tasks, return_exceptions=True)
 
     final_streams = []
     
-    task_serve = asyncio.to_thread(serve.search_serve, clean_id, type, season, episode)
-    task_archive = asyncio.to_thread(archive.search_serve, clean_id, type, season, episode)
-    
-    resultados = await asyncio.gather(task_serve, task_archive, return_exceptions=True)
-    
-    serve_streams = resultados[0]
-    archive_streams = resultados[1]
+    for res in resultados:
+        if isinstance(res, list):
+            for stream_info in res:
+                url = stream_info.get("url", "")
+                
+                if url and not url.startswith("http"):
+                    url_do_embed = f"https://byseraguci.com/e/{url}"
+                    m3u8_extraido = await extrair_m3u8_streamberry(url_do_embed)
+                    
+                    if m3u8_extraido:
+                        stream_info["url"] = m3u8_extraido
+                        final_streams.append(stream_info)
+                else:
+                    final_streams.append(stream_info)
+                    
+        elif isinstance(res, Exception):
+            pass
 
-    if isinstance(serve_streams, list) and serve_streams:
-        final_streams.extend(serve_streams)
-        
-    if isinstance(archive_streams, list) and archive_streams:
-        final_streams.extend(archive_streams)
+    return JSONResponse(content={"streams": final_streams})
 
-    
-    return add_cors(JSONResponse(content={"streams": final_streams}))
+@app.get("/meta/{type}/{id}.json")
+async def meta_endpoint(type: str, id: str):
+    try:
+        meta = await asyncio.to_thread(justwatch.fetch_meta, id, type)
+        if meta:
+            return JSONResponse(content={"meta": meta})
+    except: pass
+    return JSONResponse(content={"meta": {"id": id, "type": type, "name": "Conteúdo Desconhecido"}})
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
