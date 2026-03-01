@@ -11,11 +11,13 @@ import inspect
 import unicodedata
 import re
 
+from playwright.async_api import async_playwright
+
 import serve
 import archive
 import justwatch
 
-VERSION = "1.0.4"
+VERSION = "1.0.3"
 
 app = FastAPI()
 
@@ -37,6 +39,46 @@ def slugify(text):
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
     text = re.sub(r'[^a-z0-9]+', '-', text)
     return text.strip('-')
+
+# Função extraindo diretamente com o Playwright pelo Python
+async def extrair_m3u8_streamberry(url_video, referer_site="https://streamberry.com.br/"):
+    print(f"[*] Iniciando extração Playwright no Python para: {url_video}")
+    link_m3u8 = None
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
+        page = await context.new_page()
+
+        await page.set_extra_http_headers({
+            "Referer": referer_site,
+            "Origin": referer_site.rstrip('/'),
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+        })
+
+        async def capturar_rede(request):
+            nonlocal link_m3u8
+            url = request.url
+            if ".m3u8" in url and ("master" in url or "index" in url) and not link_m3u8:
+                print(f"\n[+] Link interceptado pelo Python: {url}\n")
+                link_m3u8 = url
+
+        page.on("request", capturar_rede)
+
+        try:
+            await page.goto(url_video, wait_until="load", timeout=30000)
+            for _ in range(15):
+                if link_m3u8:
+                    break
+                await asyncio.sleep(1)
+        except Exception as e:
+            print(f"[-] Erro na extração do Playwright: {e}")
+        finally:
+            await browser.close()
+
+    return link_m3u8
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -84,7 +126,6 @@ async def stream(type: str, id: str, request: Request):
             return func(*args)
         return asyncio.to_thread(func, *args)
 
-    # Inicia as buscas nas fontes (JSON local e Archive)
     tasks = [
         create_task(serve.search_serve, clean_id, type, season, episode),
         create_task(archive.search_serve, clean_id, type, season, episode)
@@ -93,33 +134,30 @@ async def stream(type: str, id: str, request: Request):
     resultados = await asyncio.gather(*tasks, return_exceptions=True)
     final_streams = []
 
-    async with httpx.AsyncClient() as client:
-        for res in resultados:
-            if isinstance(res, list):
-                for stream_info in res:
-                    url_original = stream_info.get("url", "")
+    for res in resultados:
+        if isinstance(res, list):
+            for stream_info in res:
+                url = stream_info.get("url", "")
 
-                    # Se o URL não começar por http, é um ID que precisa de extração pelo Go
-                    if url_original and not url_original.startswith("http"):
-                        try:
-                            # Chama o extrator/proxy em Go na porta 8080
-                            response = await client.get(
-                                f"http://localhost:8080/extract?id={url_original}",
-                                timeout=40.0
-                            )
-                            dados_go = response.json()
+                if url and not url.startswith("http"):
+                    url_do_embed = f"https://byseraguci.com/e/{url}"
+                    # Agora chama o próprio Python para rodar o Playwright
+                    m3u8_extraido = await extrair_m3u8_streamberry(url_do_embed)
 
-                            if "m3u8" in dados_go:
-                                # Substitui o ID pelo link final (ou link do proxy) gerado pelo Go
-                                stream_info["url"] = dados_go["m3u8"]
-                                final_streams.append(stream_info)
-                            else:
-                                print(f"Erro no extrator Go: {dados_go.get('erro')}")
-                        except Exception as e:
-                            print(f"Falha na comunicação com o servidor Go: {e}")
-                    else:
-                        # Links diretos (como os do Archive) são mantidos como estão
+                    if m3u8_extraido:
+                        stream_info["url"] = m3u8_extraido
+                        stream_info["behaviorHints"] = {
+                            "notWebReady": True,
+                            "proxyHeaders": {
+                                "request": {
+                                    "Referer": "https://streamberry.com.br/",
+                                    "Origin": "https://streamberry.com.br"
+                                }
+                            }
+                        }
                         final_streams.append(stream_info)
+                else:
+                    final_streams.append(stream_info)
 
     return JSONResponse(content={"streams": final_streams})
 
