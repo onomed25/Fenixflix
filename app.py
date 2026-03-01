@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import JSONResponse, HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
@@ -18,7 +18,7 @@ import serve
 import archive
 import justwatch
 
-VERSION = "1.0.3"
+VERSION = "1.0.4" # Versão atualizada
 
 app = FastAPI()
 
@@ -141,26 +141,35 @@ async def stream(type: str, id: str, request: Request):
                 url = stream_info.get("url", "")
 
                 if url and not url.startswith("http"):
-                    url_do_embed = f"https://byseraguci.com/e/{url}"
-                    # Agora chama o próprio Python para rodar o Playwright
-                    m3u8_extraido = await extrair_m3u8_streamberry(url_do_embed)
-
-                    if m3u8_extraido:
-                        # Converte o link direto num link que passa pelo nosso servidor proxy
-                        base_url = str(request.base_url)
-                        link_do_proxy = f"{base_url}proxy?url={quote(m3u8_extraido)}"
+                    # ENVIA O BOTÃO IMEDIATAMENTE PARA O STREMIO NÃO DAR TIMEOUT
+                    # Ele vai apontar para a nossa nova rota /play
+                    base_url = str(request.base_url)
+                    stream_info["url"] = f"{base_url}play?id={url}"
+                    
+                    if "behaviorHints" in stream_info:
+                        del stream_info["behaviorHints"]
                         
-                        stream_info["url"] = link_do_proxy
-                        
-                        # Removemos o behaviorHints pois o proxy já injeta os headers corretamente
-                        if "behaviorHints" in stream_info:
-                            del stream_info["behaviorHints"]
-                            
-                        final_streams.append(stream_info)
+                    final_streams.append(stream_info)
                 else:
                     final_streams.append(stream_info)
 
     return JSONResponse(content={"streams": final_streams})
+
+# --- NOVA ROTA QUE FAZ A EXTRAÇÃO LENTA SÓ QUANDO O USUÁRIO DÁ PLAY ---
+@app.get("/play")
+async def play_video(id: str, request: Request):
+    url_do_embed = f"https://byseraguci.com/e/{id}"
+    
+    # Roda o Playwright enquanto o player do Stremio está a pensar...
+    m3u8_extraido = await extrair_m3u8_streamberry(url_do_embed)
+    
+    if m3u8_extraido:
+        # Quando encontra, redireciona para o nosso proxy para tocar o vídeo
+        base_url = str(request.base_url)
+        link_do_proxy = f"{base_url}proxy?url={quote(m3u8_extraido)}"
+        return RedirectResponse(url=link_do_proxy)
+    else:
+        return HTMLResponse("Erro: Não foi possível extrair o vídeo.")
 
 @app.get("/proxy")
 async def proxy_m3u8(url: str, request: Request):
@@ -170,7 +179,6 @@ async def proxy_m3u8(url: str, request: Request):
         "Origin": "https://streamberry.com.br"
     }
     
-    # Timeout aumentado para 30 segundos
     client = httpx.AsyncClient(follow_redirects=True, timeout=30.0)
     req = client.build_request("GET", url, headers=headers)
     
@@ -183,20 +191,16 @@ async def proxy_m3u8(url: str, request: Request):
 
     content_type = r.headers.get("Content-Type", "")
     
-    # Se for uma playlist m3u8, precisamos reescrever os links internos
     if "mpegurl" in content_type.lower() or ".m3u8" in url.lower():
         content = await r.aread()
         await r.aclose()
-        await client.aclose() # Fecha o cliente após o uso
+        await client.aclose() 
         
         linhas = content.decode('utf-8').split('\n')
         for i, linha in enumerate(linhas):
             linha = linha.strip()
-            # Se for um link de arquivo ou outra playlist (não começa com #)
             if linha and not linha.startswith("#"):
-                # Garante que o link seja completo (absoluto)
                 chunk_url = urljoin(str(r.url), linha)
-                # Reescreve o link para passar pelo nosso próprio proxy
                 linhas[i] = f"{request.base_url}proxy?url={quote(chunk_url)}"
                 
         return StreamingResponse(
@@ -204,13 +208,11 @@ async def proxy_m3u8(url: str, request: Request):
             media_type=content_type or "application/vnd.apple.mpegurl"
         )
     else:
-        # Se for um pedaço de vídeo (.ts), envia direto para o Stremio
         async def stream_generator():
             try:
                 async for chunk in r.aiter_bytes():
                     yield chunk
             finally:
-                # Garante o encerramento da conexão
                 await r.aclose()
                 await client.aclose()
             
