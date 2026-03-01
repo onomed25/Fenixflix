@@ -4,3 +4,4 @@ aiohttp
 slowapi
 playwright
 requests
+httpx
