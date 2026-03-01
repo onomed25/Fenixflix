@@ -1,11 +1,5 @@
 fastapi
 uvicorn
-jinja2
+aiohttp
 slowapi
-requests
-beautifulsoup4
-cloudscraper
 playwright
-python-dotenv
-fastapi-cache2[redis]
-httpx
