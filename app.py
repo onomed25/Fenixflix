@@ -170,16 +170,24 @@ async def proxy_m3u8(url: str, request: Request):
         "Origin": "https://streamberry.com.br"
     }
     
-    client = httpx.AsyncClient(follow_redirects=True)
+    # Timeout aumentado para 30 segundos
+    client = httpx.AsyncClient(follow_redirects=True, timeout=30.0)
     req = client.build_request("GET", url, headers=headers)
     
-    r = await client.send(req, stream=True)
+    try:
+        r = await client.send(req, stream=True)
+    except Exception as e:
+        await client.aclose()
+        print(f"[-] Erro no proxy: {e}")
+        return JSONResponse(status_code=502, content={"erro": f"Falha de conexão com a CDN: {str(e)}"})
+
     content_type = r.headers.get("Content-Type", "")
     
     # Se for uma playlist m3u8, precisamos reescrever os links internos
     if "mpegurl" in content_type.lower() or ".m3u8" in url.lower():
         content = await r.aread()
         await r.aclose()
+        await client.aclose() # Fecha o cliente após o uso
         
         linhas = content.decode('utf-8').split('\n')
         for i, linha in enumerate(linhas):
@@ -198,9 +206,13 @@ async def proxy_m3u8(url: str, request: Request):
     else:
         # Se for um pedaço de vídeo (.ts), envia direto para o Stremio
         async def stream_generator():
-            async for chunk in r.aiter_bytes():
-                yield chunk
-            await r.aclose()
+            try:
+                async for chunk in r.aiter_bytes():
+                    yield chunk
+            finally:
+                # Garante o encerramento da conexão
+                await r.aclose()
+                await client.aclose()
             
         return StreamingResponse(
             stream_generator(),
