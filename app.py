@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
@@ -10,6 +10,7 @@ import uvicorn
 import inspect
 import unicodedata
 import re
+from urllib.parse import quote, urljoin
 
 from playwright.async_api import async_playwright
 
@@ -145,21 +146,66 @@ async def stream(type: str, id: str, request: Request):
                     m3u8_extraido = await extrair_m3u8_streamberry(url_do_embed)
 
                     if m3u8_extraido:
-                        stream_info["url"] = m3u8_extraido
-                        stream_info["behaviorHints"] = {
-                            "notWebReady": True,
-                            "proxyHeaders": {
-                                "request": {
-                                    "Referer": "https://streamberry.com.br/",
-                                    "Origin": "https://streamberry.com.br"
-                                }
-                            }
-                        }
+                        # Converte o link direto num link que passa pelo nosso servidor proxy
+                        base_url = str(request.base_url)
+                        link_do_proxy = f"{base_url}proxy?url={quote(m3u8_extraido)}"
+                        
+                        stream_info["url"] = link_do_proxy
+                        
+                        # Removemos o behaviorHints pois o proxy já injeta os headers corretamente
+                        if "behaviorHints" in stream_info:
+                            del stream_info["behaviorHints"]
+                            
                         final_streams.append(stream_info)
                 else:
                     final_streams.append(stream_info)
 
     return JSONResponse(content={"streams": final_streams})
+
+@app.get("/proxy")
+async def proxy_m3u8(url: str, request: Request):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Referer": "https://streamberry.com.br/",
+        "Origin": "https://streamberry.com.br"
+    }
+    
+    client = httpx.AsyncClient(follow_redirects=True)
+    req = client.build_request("GET", url, headers=headers)
+    
+    r = await client.send(req, stream=True)
+    content_type = r.headers.get("Content-Type", "")
+    
+    # Se for uma playlist m3u8, precisamos reescrever os links internos
+    if "mpegurl" in content_type.lower() or ".m3u8" in url.lower():
+        content = await r.aread()
+        await r.aclose()
+        
+        linhas = content.decode('utf-8').split('\n')
+        for i, linha in enumerate(linhas):
+            linha = linha.strip()
+            # Se for um link de arquivo ou outra playlist (não começa com #)
+            if linha and not linha.startswith("#"):
+                # Garante que o link seja completo (absoluto)
+                chunk_url = urljoin(str(r.url), linha)
+                # Reescreve o link para passar pelo nosso próprio proxy
+                linhas[i] = f"{request.base_url}proxy?url={quote(chunk_url)}"
+                
+        return StreamingResponse(
+            iter([("\n".join(linhas)).encode('utf-8')]),
+            media_type=content_type or "application/vnd.apple.mpegurl"
+        )
+    else:
+        # Se for um pedaço de vídeo (.ts), envia direto para o Stremio
+        async def stream_generator():
+            async for chunk in r.aiter_bytes():
+                yield chunk
+            await r.aclose()
+            
+        return StreamingResponse(
+            stream_generator(),
+            media_type=content_type or "video/mp2t"
+        )
 
 @app.get("/meta/{type}/{id}.json")
 async def meta_endpoint(type: str, id: str):
