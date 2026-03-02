@@ -6,3 +6,4 @@ requests
 httpx
 jinja2
 playwright
+python-dotenv
