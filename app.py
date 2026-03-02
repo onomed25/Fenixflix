@@ -1,25 +1,30 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, HTMLResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import asyncio
 import httpx
-import uvicorn
-import inspect
-import unicodedata
 import re
-from urllib.parse import quote, urljoin
-
-from playwright.async_api import async_playwright
+import os
+import time
+import json
+from datetime import datetime
+from urllib.parse import quote
+import uvicorn
+from dotenv import load_dotenv
 
 import serve
 import archive
 import justwatch
 
-VERSION = "1.0.4" # Versão atualizada
+load_dotenv()
 
+
+
+
+VERSION = "1.0.4"
 app = FastAPI()
 
 templates = Jinja2Templates(directory="templates")
@@ -34,82 +39,139 @@ app.add_middleware(
 
 limiter = Limiter(key_func=get_remote_address)
 
-def slugify(text):
-    if not text: return ""
-    text = str(text).lower()
-    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    text = re.sub(r'[^a-z0-9]+', '-', text)
-    return text.strip('-')
+CACHE_DIR = "cache"
+CATALOG_CACHE_TIME = 6 * 60 * 60
 
-# Função extraindo diretamente com o Playwright pelo Python
-async def extrair_m3u8_streamberry(url_video, referer_site="https://streamberry.com.br/"):
-    print(f"[*] Iniciando extração Playwright no Python para: {url_video}")
-    link_m3u8 = None
+if not os.path.exists(CACHE_DIR):
+    os.makedirs(CACHE_DIR)
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
-        page = await context.new_page()
+async def notificar_falta_servidor(imdb_id, content_type, season=None, episode=None):
+    msg = f"Falta {content_type}: {imdb_id}"
+    if content_type == 'series' and season and episode:
+        msg += f" (Temporada {season}, Episódio {episode})"
 
-        await page.set_extra_http_headers({
-            "Referer": referer_site,
-            "Origin": referer_site.rstrip('/'),
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
-        })
-
-        async def capturar_rede(request):
-            nonlocal link_m3u8
-            url = request.url
-            if ".m3u8" in url and ("master" in url or "index" in url) and not link_m3u8:
-                print(f"\n[+] Link interceptado pelo Python: {url}\n")
-                link_m3u8 = url
-
-        page.on("request", capturar_rede)
-
+    url = "http://217.160.125.125:13435/aviso_falta"
+    async with httpx.AsyncClient() as client:
         try:
-            await page.goto(url_video, wait_until="load", timeout=30000)
-            for _ in range(15):
-                if link_m3u8:
-                    break
-                await asyncio.sleep(1)
-        except Exception as e:
-            print(f"[-] Erro na extração do Playwright: {e}")
-        finally:
-            await browser.close()
+            await client.get(url, params={"msg": msg}, timeout=3)
+        except:
+            pass
 
-    return link_m3u8
+async def fetch_cinemeta(imdb_id, content_type):
+    url_tmdb = f"https://94c8cb9f702d-tmdb-addon.baby-beamup.club/pt-BR/meta/{content_type}/{imdb_id}.json"
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        try:
+            resp = await client.get(url_tmdb, timeout=5)
+            if resp.status_code == 200:
+                meta = resp.json().get("meta", {})
+                if meta: return {"id": imdb_id, "type": content_type, "name": meta.get("name", f"Conteúdo {imdb_id}"), "poster": meta.get("poster"), "description": meta.get("description", "Sinopse não disponível.")}
+        except: pass
+
+        url_cinemeta = f"https://v3-cinemeta.strem.io/meta/{content_type}/{imdb_id}.json"
+        try:
+            resp = await client.get(url_cinemeta, timeout=5)
+            if resp.status_code == 200:
+                meta = resp.json().get("meta", {})
+                if meta: return {"id": imdb_id, "type": content_type, "name": meta.get("name", f"Conteúdo {imdb_id}"), "poster": meta.get("poster"), "description": meta.get("description", "Sinopse não disponível.")}
+        except: pass
+
+    return {"id": imdb_id, "type": content_type, "name": f"Conteúdo {imdb_id}"}
+
+async def build_recent_catalog():
+    url = "http://217.160.125.125:13435/"
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, timeout=10)
+            html = resp.text
+    except:
+        return {"movie": [], "series": []}
+
+    pattern = re.compile(r'(tt\d+)\.json.*?Modificado em:\s*(\d{2}/\d{2}/\d{4}\s\d{2}:\d{2})', re.DOTALL | re.IGNORECASE)
+    matches = pattern.findall(html)
+
+    items_dict = {}
+    if matches:
+        for imdb_id, date_str in matches:
+            try:
+                dt = datetime.strptime(date_str, "%d/%m/%Y %H:%M")
+                items_dict[imdb_id] = dt.timestamp()
+            except:
+                if imdb_id not in items_dict: items_dict[imdb_id] = 0
+    else:
+        for imdb_id in set(re.findall(r'(tt\d+)\.json', html)): items_dict[imdb_id] = 0
+
+    sorted_items = sorted(items_dict.items(), key=lambda x: x[1], reverse=True)
+    recent_ids = [k for k, v in sorted_items]
+
+    movies = []
+    series = []
+
+    async with httpx.AsyncClient() as client:
+        for imdb_id in recent_ids:
+            if len(movies) >= 20 and len(series) >= 20: break
+            json_url = f"http://217.160.125.125:13435/{imdb_id}.json"
+            try:
+                resp = await client.get(json_url, timeout=5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    streams = data.get("streams", {})
+                    if isinstance(streams, dict) and len(series) < 20:
+                        meta = await fetch_cinemeta(imdb_id, "series")
+                        series.append(meta)
+                    elif isinstance(streams, list) and len(movies) < 20:
+                        meta = await fetch_cinemeta(imdb_id, "movie")
+                        movies.append(meta)
+            except: continue
+
+    return {"movie": movies, "series": series}
+
+async def get_recent_catalog_cached(content_type):
+    cache_file = os.path.join(CACHE_DIR, "server_recent_catalog.json")
+    if os.path.exists(cache_file):
+        if (time.time() - os.path.getmtime(cache_file)) < CATALOG_CACHE_TIME:
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    return data.get(content_type, [])
+            except: pass
+
+    catalogs = await build_recent_catalog()
+    try:
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(catalogs, f, ensure_ascii=False)
+    except: pass
+
+    return catalogs.get(content_type, [])
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    manifest_data = {
-        "name": "FENIXFLIX",
-        "description": "Filmes e Séries via Archive & Bysebuho",
-        "types": ["movie", "series"]
-    }
-
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "manifest": manifest_data,
-        "version": VERSION
-    })
+    manifest_data = {"name": "FENIXFLIX", "description": "Filmes e Séries via Archive & Servidor Fenix", "types": ["movie", "series"]}
+    return templates.TemplateResponse("index.html", {"request": request, "manifest": manifest_data, "version": VERSION})
 
 @app.get("/manifest.json")
 async def manifest_endpoint():
     return JSONResponse(content={
-        "id": "com.fenixflix",
-        "version": VERSION,
-        "name": "FENIXFLIX",
-        "description": "Filmes e Séries via Archive & Bysebuho",
-        "resources": ["stream", "catalog", "meta"],
-        "types": ["movie", "series"],
+        "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
+        "description": "Filmes e Séries via Archive & Servidor Fenix",
+        "resources": ["stream", "catalog", "meta"], "types": ["movie", "series"],
         "catalogs": [
-            {"type": "movie", "id": "popular", "name": "Populares (Fenix)"},
-            {"type": "series", "id": "popular", "name": "Populares (Fenix)"}
+            {"type": "movie", "id": "popular", "name": "Populares"},
+            {"type": "movie", "id": "recentes_servidor", "name": "Recém Adicionado (Fenix)"},
+            {"type": "series", "id": "popular", "name": "Populares"},
+            {"type": "series", "id": "recentes_servidor", "name": "Recém Adicionado (Fenix)"}
         ],
         "idPrefixes": ["tt", "tmdb"]
     })
+
+@app.get("/catalog/{type}/{id}.json")
+async def catalog_endpoint(type: str, id: str):
+    if id == "recentes_servidor":
+        catalogo = await get_recent_catalog_cached(type)
+        return JSONResponse(content={"metas": catalogo})
+    elif id == "popular":
+        catalogo = await asyncio.to_thread(justwatch.fetch_catalog, id, type)
+        return JSONResponse(content={"metas": catalogo})
+    return JSONResponse(content={"metas": []})
 
 @app.get("/stream/{type}/{id}.json")
 @limiter.limit("15/minute")
@@ -123,8 +185,7 @@ async def stream(type: str, id: str, request: Request):
         except: pass
 
     def create_task(func, *args):
-        if inspect.iscoroutinefunction(func):
-            return func(*args)
+        if asyncio.iscoroutinefunction(func): return func(*args)
         return asyncio.to_thread(func, *args)
 
     tasks = [
@@ -138,97 +199,34 @@ async def stream(type: str, id: str, request: Request):
     for res in resultados:
         if isinstance(res, list):
             for stream_info in res:
+                if "behaviorHints" in stream_info: del stream_info["behaviorHints"]
+
+
                 url = stream_info.get("url", "")
 
-                if url and not url.startswith("http"):
-                    # ENVIA O BOTÃO IMEDIATAMENTE PARA O STREMIO NÃO DAR TIMEOUT
-                    # Ele vai apontar para a nossa nova rota /play
-                    base_url = str(request.base_url)
-                    stream_info["url"] = f"{base_url}play?id={url}"
-                    
-                    if "behaviorHints" in stream_info:
-                        del stream_info["behaviorHints"]
-                        
-                    final_streams.append(stream_info)
-                else:
-                    final_streams.append(stream_info)
+                final_streams.append(stream_info)
+
+    if not final_streams:
+        asyncio.create_task(notificar_falta_servidor(clean_id, type, season, episode))
 
     return JSONResponse(content={"streams": final_streams})
 
-# --- NOVA ROTA QUE FAZ A EXTRAÇÃO LENTA SÓ QUANDO O USUÁRIO DÁ PLAY ---
-@app.get("/play")
-async def play_video(id: str, request: Request):
-    url_do_embed = f"https://byseraguci.com/e/{id}"
-    
-    # Roda o Playwright enquanto o player do Stremio está a pensar...
-    m3u8_extraido = await extrair_m3u8_streamberry(url_do_embed)
-    
-    if m3u8_extraido:
-        # Quando encontra, redireciona para o nosso proxy para tocar o vídeo
-        base_url = str(request.base_url)
-        link_do_proxy = f"{base_url}proxy?url={quote(m3u8_extraido)}"
-        return RedirectResponse(url=link_do_proxy)
-    else:
-        return HTMLResponse("Erro: Não foi possível extrair o vídeo.")
-
-@app.get("/proxy")
-async def proxy_m3u8(url: str, request: Request):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Referer": "https://streamberry.com.br/",
-        "Origin": "https://streamberry.com.br"
-    }
-    
-    client = httpx.AsyncClient(follow_redirects=True, timeout=30.0)
-    req = client.build_request("GET", url, headers=headers)
-    
-    try:
-        r = await client.send(req, stream=True)
-    except Exception as e:
-        await client.aclose()
-        print(f"[-] Erro no proxy: {e}")
-        return JSONResponse(status_code=502, content={"erro": f"Falha de conexão com a CDN: {str(e)}"})
-
-    content_type = r.headers.get("Content-Type", "")
-    
-    if "mpegurl" in content_type.lower() or ".m3u8" in url.lower():
-        content = await r.aread()
-        await r.aclose()
-        await client.aclose() 
-        
-        linhas = content.decode('utf-8').split('\n')
-        for i, linha in enumerate(linhas):
-            linha = linha.strip()
-            if linha and not linha.startswith("#"):
-                chunk_url = urljoin(str(r.url), linha)
-                linhas[i] = f"{request.base_url}proxy?url={quote(chunk_url)}"
-                
-        return StreamingResponse(
-            iter([("\n".join(linhas)).encode('utf-8')]),
-            media_type=content_type or "application/vnd.apple.mpegurl"
-        )
-    else:
-        async def stream_generator():
-            try:
-                async for chunk in r.aiter_bytes():
-                    yield chunk
-            finally:
-                await r.aclose()
-                await client.aclose()
-            
-        return StreamingResponse(
-            stream_generator(),
-            media_type=content_type or "video/mp2t"
-        )
-
 @app.get("/meta/{type}/{id}.json")
 async def meta_endpoint(type: str, id: str):
-    try:
-        meta = await asyncio.to_thread(justwatch.fetch_meta, id, type)
-        if meta:
-            return JSONResponse(content={"meta": meta})
-    except: pass
-    return JSONResponse(content={"meta": {"id": id, "type": type, "name": "Conteúdo Desconhecido"}})
+    url_tmdb = f"https://94c8cb9f702d-tmdb-addon.baby-beamup.club/pt-BR/meta/{type}/{id}.json"
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        try:
+            resp = await client.get(url_tmdb, timeout=5)
+            if resp.status_code == 200: return JSONResponse(content=resp.json())
+        except: pass
+
+        url_cinemeta = f"https://v3-cinemeta.strem.io/meta/{type}/{id}.json"
+        try:
+            resp = await client.get(url_cinemeta, timeout=5)
+            if resp.status_code == 200: return JSONResponse(content=resp.json())
+        except: pass
+
+    return JSONResponse(content={"meta": {"id": id, "type": type, "name": f"Conteúdo {id}"}})
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
