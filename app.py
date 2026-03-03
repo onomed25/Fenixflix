@@ -108,17 +108,17 @@ async def build_recent_catalog():
 
     async with httpx.AsyncClient() as client:
         for imdb_id in recent_ids:
-            if len(movies) >= 20 and len(series) >= 20: break
+            if len(movies) >= 25 and len(series) >= 25: break
             json_url = f"http://217.160.125.125:13435/{imdb_id}.json"
             try:
                 resp = await client.get(json_url, timeout=5)
                 if resp.status_code == 200:
                     data = resp.json()
                     streams = data.get("streams", {})
-                    if isinstance(streams, dict) and len(series) < 20:
+                    if isinstance(streams, dict) and len(series) < 25:
                         meta = await fetch_cinemeta(imdb_id, "series")
                         series.append(meta)
-                    elif isinstance(streams, list) and len(movies) < 20:
+                    elif isinstance(streams, list) and len(movies) < 25:
                         meta = await fetch_cinemeta(imdb_id, "movie")
                         movies.append(meta)
             except: continue
@@ -145,14 +145,16 @@ async def get_recent_catalog_cached(content_type):
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    manifest_data = {"name": "FENIXFLIX", "description": "Filmes e Séries via Archive & Servidor Fenix", "types": ["movie", "series"]}
+    manifest_data = {"name": "FENIXFLIX", "description": "Addon de Filmes e Séries", "types": ["movie", "series"]}
     return templates.TemplateResponse("index.html", {"request": request, "manifest": manifest_data, "version": VERSION})
 
 @app.get("/manifest.json")
 async def manifest_endpoint():
     return JSONResponse(content={
         "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
-        "description": "Filmes e Séries via Archive & Servidor Fenix",
+        "description": "Addon de Filmes e Séries",
+        "logo": "https://i.imgur.com/9SKgxfU.png",
+        "background": "https://dl.strem.io/addon-background.jpg",
         "resources": ["stream", "catalog", "meta"], "types": ["movie", "series"],
         "catalogs": [
             {"type": "movie", "id": "popular", "name": "Populares"},
