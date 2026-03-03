@@ -9,7 +9,7 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
     url = f"http://217.160.125.125:13435/{imdb_id}.json"
 
     try:
-        response = session.get(url, timeout=4)
+        response = session.get(url, timeout=10)
         if response.status_code == 404:
             return []
 
