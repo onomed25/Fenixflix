@@ -10,9 +10,6 @@ COPY . .
 # Instala as dependências do Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instala o navegador Chromium do Playwright para o Python
-RUN playwright install chromium --with-deps
-
 # Libera a porta 8000 para a internet
 EXPOSE 8000
 
