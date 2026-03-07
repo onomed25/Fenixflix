@@ -50,7 +50,7 @@ async def notificar_falta_servidor(imdb_id, content_type, season=None, episode=N
     if content_type == 'series' and season and episode:
         msg += f" (Temporada {season}, Episódio {episode})"
 
-    url = "http://217.160.125.125:13435/aviso_falta"
+    url = "http://87.106.82.84:14923/aviso_falta"
     async with httpx.AsyncClient() as client:
         try:
             await client.get(url, params={"msg": msg}, timeout=3)
@@ -78,7 +78,7 @@ async def fetch_cinemeta(imdb_id, content_type):
     return {"id": imdb_id, "type": content_type, "name": f"Conteúdo {imdb_id}"}
 
 async def build_recent_catalog():
-    url = "http://217.160.125.125:13435/"
+    url = "http://87.106.82.84:14923/"
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(url, timeout=10)
@@ -109,7 +109,7 @@ async def build_recent_catalog():
     async with httpx.AsyncClient() as client:
         for imdb_id in recent_ids:
             if len(movies) >= 25 and len(series) >= 25: break
-            json_url = f"http://217.160.125.125:13435/{imdb_id}.json"
+            json_url = f"http://87.106.82.84:14923/{imdb_id}"
             try:
                 resp = await client.get(json_url, timeout=5)
                 if resp.status_code == 200:

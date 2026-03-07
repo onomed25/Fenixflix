@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 session = requests.Session()
 
 def search_serve(imdb_id, content_type, season=None, episode=None):
-    url = f"http://217.160.125.125:13435/{imdb_id}.json"
+    url = f"http://87.106.82.84:14923{imdb_id}"
 
     try:
         response = session.get(url, timeout=10)
