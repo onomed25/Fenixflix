@@ -21,9 +21,6 @@ import justwatch
 
 load_dotenv()
 
-
-
-
 VERSION = "1.0.4"
 app = FastAPI()
 
@@ -78,50 +75,46 @@ async def fetch_cinemeta(imdb_id, content_type):
     return {"id": imdb_id, "type": content_type, "name": f"Conteúdo {imdb_id}"}
 
 async def build_recent_catalog():
-    url = "http://87.106.82.84:14923/"
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, timeout=10)
-            html = resp.text
-    except:
-        return {"movie": [], "series": []}
-
-    pattern = re.compile(r'(tt\d+)\.json.*?Modificado em:\s*(\d{2}/\d{2}/\d{4}\s\d{2}:\d{2})', re.DOTALL | re.IGNORECASE)
-    matches = pattern.findall(html)
-
-    items_dict = {}
-    if matches:
-        for imdb_id, date_str in matches:
-            try:
-                dt = datetime.strptime(date_str, "%d/%m/%Y %H:%M")
-                items_dict[imdb_id] = dt.timestamp()
-            except:
-                if imdb_id not in items_dict: items_dict[imdb_id] = 0
-    else:
-        for imdb_id in set(re.findall(r'(tt\d+)\.json', html)): items_dict[imdb_id] = 0
-
-    sorted_items = sorted(items_dict.items(), key=lambda x: x[1], reverse=True)
-    recent_ids = [k for k, v in sorted_items]
-
+    # Nova rota da API que retorna tudo de uma vez do banco SQLite
+    url = "http://87.106.82.84:14923/api/all"
     movies = []
     series = []
 
-    async with httpx.AsyncClient() as client:
-        for imdb_id in recent_ids:
-            if len(movies) >= 25 and len(series) >= 25: break
-            json_url = f"http://87.106.82.84:14923/{imdb_id}"
-            try:
-                resp = await client.get(json_url, timeout=5)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    streams = data.get("streams", {})
-                    if isinstance(streams, dict) and len(series) < 25:
-                        meta = await fetch_cinemeta(imdb_id, "series")
-                        series.append(meta)
-                    elif isinstance(streams, list) and len(movies) < 25:
-                        meta = await fetch_cinemeta(imdb_id, "movie")
-                        movies.append(meta)
-            except: continue
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, timeout=10)
+            if resp.status_code != 200:
+                return {"movie": [], "series": []}
+            all_data = resp.json()
+    except Exception as e:
+        print(f"Erro ao buscar catálogo: {e}")
+        return {"movie": [], "series": []}
+
+    # Transformar os valores do dicionário recebido em uma lista
+    items = list(all_data.values())
+
+    # Iterar sobre os itens retornados do banco de dados
+    for data in items:
+        # Se já preencheu 25 de cada, pode parar para não sobrecarregar
+        if len(movies) >= 25 and len(series) >= 25:
+            break
+
+        imdb_id = data.get("id")
+        if not imdb_id:
+            continue
+
+        # Ler os dados direto do JSON recebido pela API
+        content_type = data.get("type", "movie")
+        streams = data.get("streams", {})
+
+        # Separar Séries e Filmes buscando os metadados
+        if content_type == "series" and isinstance(streams, dict) and len(series) < 25:
+            meta = await fetch_cinemeta(imdb_id, "series")
+            if meta: series.append(meta)
+
+        elif (content_type == "movie" or isinstance(streams, list)) and len(movies) < 25:
+            meta = await fetch_cinemeta(imdb_id, "movie")
+            if meta: movies.append(meta)
 
     return {"movie": movies, "series": series}
 
@@ -165,14 +158,23 @@ async def manifest_endpoint():
         "idPrefixes": ["tt", "tmdb"]
     })
 
+# Adicionamos a segunda rota para suportar parâmetros extras como paginação
 @app.get("/catalog/{type}/{id}.json")
-async def catalog_endpoint(type: str, id: str):
+@app.get("/catalog/{type}/{id}/{extra}.json")
+async def catalog_endpoint(type: str, id: str, extra: str = None):
+
+    # Se o Stremio estiver pedindo a página 2 em diante (skip=25, skip=50...)
+    # Por enquanto, retornamos vazio para ele parar de procurar e não dar erro.
+    if extra and "skip" in extra:
+        return JSONResponse(content={"metas": []})
+
     if id == "recentes_servidor":
         catalogo = await get_recent_catalog_cached(type)
         return JSONResponse(content={"metas": catalogo})
     elif id == "popular":
         catalogo = await asyncio.to_thread(justwatch.fetch_catalog, id, type)
         return JSONResponse(content={"metas": catalogo})
+
     return JSONResponse(content={"metas": []})
 
 @app.get("/stream/{type}/{id}.json")
@@ -202,7 +204,6 @@ async def stream(type: str, id: str, request: Request):
         if isinstance(res, list):
             for stream_info in res:
                 if "behaviorHints" in stream_info: del stream_info["behaviorHints"]
-
 
                 url = stream_info.get("url", "")
 
