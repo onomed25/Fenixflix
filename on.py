@@ -24,9 +24,7 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
         try:
-            print(f"[Azullog Debug] A fazer requisição à página principal...")
             res = await client.get(url, headers=headers)
-            print(f"[Azullog Debug] Status HTTP da página principal: {res.status_code}")
 
             if res.status_code != 200:
                 print("[Azullog Debug] Falha ao aceder à página. Abortando extração.")
@@ -34,11 +32,9 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 
             soup = BeautifulSoup(res.text, 'html.parser')
             select_items = soup.select("div.player_select_item")
-            print(f"[Azullog Debug] Encontrados {len(select_items)} players na lista 'player_select_item'.")
 
             # Fallback caso não tenha a lista de players, mas apenas um iframe na página principal
             if not select_items:
-                print("[Azullog Debug] Nenhum player encontrado na lista. Tentando fallback para iframe único...")
                 iframe = soup.select_one("iframe")
                 if iframe and iframe.get("src"):
                     src = iframe.get("src")
@@ -90,14 +86,12 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                                 mediafire_url = unquote(mediafire_enc_match.group(1))
 
                                 # Acede ao MediaFire para sacar o botão de Download direto
-                                print("[Azullog Debug] Acessando a página do MediaFire...")
                                 mf_res = await client.get(mediafire_url, headers={"Referer": player_url, "User-Agent": headers["User-Agent"]})
                                 mf_soup = BeautifulSoup(mf_res.text, 'html.parser')
                                 download_btn = mf_soup.select_one("a#downloadButton")
 
                                 if download_btn:
                                     final_mf_link = download_btn.get("href")
-                                    print(f"[Azullog Debug] SUCESSO! Link direto do MediaFire extraído: {final_mf_link}")
                                     streams.append({
                                         "name": "FenixFlix",
                                         "title": f"{label}\nON",
@@ -129,11 +123,22 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                         print("[Azullog Debug] Nenhum iframe de vídeo encontrado neste player.")
 
                 except Exception as inner_e:
-                    print(f"[Azullog Debug] Erro a processar o player '{label}': {inner_e}")
                     continue
 
         except Exception as e:
             print(f"[Azullog Debug] Erro global na execução do scraper: {e}")
 
-    print(f"[Azullog Debug] Fim da busca. Total de streams adicionados: {len(streams)}\n")
+
+    # Notifica o servidor se não encontrou nenhum stream
+    if not streams:
+        try:
+            msg = f"[Azullog] Sem stream para {content_type}: TMDB {tmdb_id}"
+            if content_type == "series" and season and episode:
+                msg += f" (T{season}E{episode})"
+            async with httpx.AsyncClient() as notif_client:
+                await notif_client.get("http://87.106.82.84:14923/aviso_falta", params={"msg": msg}, timeout=3)
+            print(f"[Azullog Debug] Notificado servidor: {msg}")
+        except Exception:
+            pass
+
     return streams

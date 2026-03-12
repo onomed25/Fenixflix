@@ -19,7 +19,7 @@ import serve
 import archive
 import justwatch
 import on
-import utils
+import go  # <- Importando o novo módulo go.py
 
 # Carrega as variáveis do arquivo .env
 load_dotenv()
@@ -99,6 +99,80 @@ async def fetch_cinemeta(imdb_id, content_type):
         except Exception: pass
 
     return {"id": imdb_id, "type": content_type, "name": f"Conteúdo {imdb_id}"}
+
+# --- FUNÇÃO COM TMDB DIRETO PARA TÍTULOS PT-BR CONFIÁVEIS ---
+async def obter_titulos_publicos(imdb_id, content_type):
+    titulos = []
+    print(f"\n[DEBUG - APP] Buscando títulos públicos para o ID: {imdb_id} | Tipo: {content_type}")
+
+    # Fonte 1: TMDB direto com pt-BR (mais confiável)
+    tmdb_type = "movie" if content_type == "movie" else "tv"
+    url_tmdb_ptbr = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"
+    url_tmdb_orig = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=en-US"
+
+    # Fonte 2: addons públicos como fallback
+    url_ptbr_addon = f"https://94c8cb9f702d-tmdb-addon.baby-beamup.club/pt-BR/meta/{content_type}/{imdb_id}.json"
+    url_cinemeta = f"https://v3-cinemeta.strem.io/meta/{content_type}/{imdb_id}.json"
+
+    async with httpx.AsyncClient() as client:
+        # --- Tenta TMDB direto primeiro ---
+        try:
+            req_ptbr, req_orig = await asyncio.gather(
+                client.get(url_tmdb_ptbr, timeout=5),
+                client.get(url_tmdb_orig, timeout=5),
+                return_exceptions=True
+            )
+
+            def extrair_nome_tmdb(resp, tipo):
+                if isinstance(resp, Exception) or resp.status_code != 200:
+                    return None
+                data = resp.json()
+                results = data.get(f"{tipo}_results", [])
+                if results:
+                    return results[0].get("title") or results[0].get("name")
+                return None
+
+            nome_ptbr = extrair_nome_tmdb(req_ptbr, tmdb_type)
+            nome_orig = extrair_nome_tmdb(req_orig, tmdb_type)
+
+            if nome_ptbr:
+                titulos.append(nome_ptbr)
+                print(f"[DEBUG - APP] Título PT-BR (TMDB direto): '{nome_ptbr}'")
+
+            if nome_orig and nome_orig not in titulos:
+                titulos.append(nome_orig)
+                print(f"[DEBUG - APP] Título Original (TMDB direto): '{nome_orig}'")
+
+        except Exception as e:
+            print(f"[DEBUG - APP] Falha no TMDB direto: {e}")
+
+        # --- Fallback: addons públicos se TMDB não retornou nada ---
+        if not titulos:
+            print(f"[DEBUG - APP] TMDB direto falhou, tentando addons públicos...")
+            try:
+                req_pt_addon, req_cinemeta = await asyncio.gather(
+                    client.get(url_ptbr_addon, timeout=5),
+                    client.get(url_cinemeta, timeout=5),
+                    return_exceptions=True
+                )
+
+                if not isinstance(req_pt_addon, Exception) and req_pt_addon.status_code == 200:
+                    nome_pt = req_pt_addon.json().get("meta", {}).get("name")
+                    if nome_pt and not nome_pt.startswith("Conteúdo "):
+                        titulos.append(nome_pt)
+                        print(f"[DEBUG - APP] Título PT-BR (addon): '{nome_pt}'")
+
+                if not isinstance(req_cinemeta, Exception) and req_cinemeta.status_code == 200:
+                    nome_en = req_cinemeta.json().get("meta", {}).get("name")
+                    if nome_en and not nome_en.startswith("Conteúdo ") and nome_en not in titulos:
+                        titulos.append(nome_en)
+                        print(f"[DEBUG - APP] Título Original (cinemeta): '{nome_en}'")
+
+            except Exception as e:
+                print(f"[DEBUG - APP] Falha nos addons públicos: {e}")
+
+    print(f"[DEBUG - APP] Lista final de títulos enviada para busca: {titulos}")
+    return titulos
 
 async def build_recent_catalog():
     url = "http://87.106.82.84:14923/api/all"
@@ -205,6 +279,9 @@ async def stream(type: str, id: str, request: Request):
 
     tmdb_id = await converter_imdb_para_tmdb(clean_id)
 
+    # Função sem API buscando os títulos agora com debug no terminal
+    titles_to_search = await obter_titulos_publicos(clean_id, type)
+
     def create_task(func, *args):
         if asyncio.iscoroutinefunction(func): return func(*args)
         return asyncio.to_thread(func, *args)
@@ -217,8 +294,11 @@ async def stream(type: str, id: str, request: Request):
     if tmdb_id:
         tasks.append(create_task(on.search_serve, tmdb_id, type, season, episode))
 
+    if titles_to_search:
+        tasks.append(create_task(go.search_serve, titles_to_search, type, season, episode))
+
     resultados = await asyncio.gather(*tasks, return_exceptions=True)
-    final_streams = []
+    todos_streams = []
 
     for res in resultados:
         if isinstance(res, list):
@@ -226,15 +306,17 @@ async def stream(type: str, id: str, request: Request):
                 if "behaviorHints" in stream_info:
                     del stream_info["behaviorHints"]
 
-                # --- EXTRAÇÃO AUTOMÁTICA DE STREAMTAPE PARA QUALQUER SCRAPER ---
-                url_atual = stream_info.get("url", "")
-                if url_atual and "streamtape" in url_atual.lower():
-                    # Usa o utils.py em thread separada para não bloquear o servidor
-                    url_resolvida = await asyncio.to_thread(utils.resolver_streamtape_url, url_atual)
-                    if url_resolvida:
-                        stream_info["url"] = url_resolvida
+                todos_streams.append(stream_info)
 
-                final_streams.append(stream_info)
+    # Prioridade: só mostra Mediafire; se não tiver, mostra tudo
+    mediafire_streams = [s for s in todos_streams if "mediafire" in s.get("url", "").lower()]
+
+    if mediafire_streams:
+        print(f"[DEBUG - APP] {len(mediafire_streams)} stream(s) Mediafire encontrado(s), exibindo apenas eles.")
+        final_streams = mediafire_streams
+    else:
+        print(f"[DEBUG - APP] Nenhum Mediafire encontrado, exibindo todos os {len(todos_streams)} stream(s).")
+        final_streams = todos_streams
 
     if not final_streams:
         asyncio.create_task(notificar_falta_servidor(clean_id, type, season, episode))
