@@ -18,7 +18,10 @@ from dotenv import load_dotenv
 import serve
 import archive
 import justwatch
+import on
+import utils
 
+# Carrega as variáveis do arquivo .env
 load_dotenv()
 
 VERSION = "1.0.4"
@@ -39,8 +42,31 @@ limiter = Limiter(key_func=get_remote_address)
 CACHE_DIR = "cache"
 CATALOG_CACHE_TIME = 6 * 60 * 60
 
+# Pega a chave do TMDB EXCLUSIVAMENTE do arquivo .env
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+
+if not TMDB_API_KEY:
+    print("AVISO: A variável TMDB_API_KEY não foi encontrada no arquivo .env!")
+
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
+
+async def converter_imdb_para_tmdb(imdb_id: str):
+    url = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id"
+
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(url, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("movie_results"):
+                    return str(data["movie_results"][0]["id"])
+                elif data.get("tv_results"):
+                    return str(data["tv_results"][0]["id"])
+        except Exception:
+            pass
+
+    return None
 
 async def notificar_falta_servidor(imdb_id, content_type, season=None, episode=None):
     msg = f"Falta {content_type}: {imdb_id}"
@@ -51,7 +77,7 @@ async def notificar_falta_servidor(imdb_id, content_type, season=None, episode=N
     async with httpx.AsyncClient() as client:
         try:
             await client.get(url, params={"msg": msg}, timeout=3)
-        except:
+        except Exception:
             pass
 
 async def fetch_cinemeta(imdb_id, content_type):
@@ -62,7 +88,7 @@ async def fetch_cinemeta(imdb_id, content_type):
             if resp.status_code == 200:
                 meta = resp.json().get("meta", {})
                 if meta: return {"id": imdb_id, "type": content_type, "name": meta.get("name", f"Conteúdo {imdb_id}"), "poster": meta.get("poster"), "description": meta.get("description", "Sinopse não disponível.")}
-        except: pass
+        except Exception: pass
 
         url_cinemeta = f"https://v3-cinemeta.strem.io/meta/{content_type}/{imdb_id}.json"
         try:
@@ -70,12 +96,11 @@ async def fetch_cinemeta(imdb_id, content_type):
             if resp.status_code == 200:
                 meta = resp.json().get("meta", {})
                 if meta: return {"id": imdb_id, "type": content_type, "name": meta.get("name", f"Conteúdo {imdb_id}"), "poster": meta.get("poster"), "description": meta.get("description", "Sinopse não disponível.")}
-        except: pass
+        except Exception: pass
 
     return {"id": imdb_id, "type": content_type, "name": f"Conteúdo {imdb_id}"}
 
 async def build_recent_catalog():
-    # Nova rota da API que retorna tudo de uma vez do banco SQLite
     url = "http://87.106.82.84:14923/api/all"
     movies = []
     series = []
@@ -86,16 +111,12 @@ async def build_recent_catalog():
             if resp.status_code != 200:
                 return {"movie": [], "series": []}
             all_data = resp.json()
-    except Exception as e:
-        print(f"Erro ao buscar catálogo: {e}")
+    except Exception:
         return {"movie": [], "series": []}
 
-    # Transformar os valores do dicionário recebido em uma lista
     items = list(all_data.values())
 
-    # Iterar sobre os itens retornados do banco de dados
     for data in items:
-        # Se já preencheu 25 de cada, pode parar para não sobrecarregar
         if len(movies) >= 25 and len(series) >= 25:
             break
 
@@ -103,11 +124,9 @@ async def build_recent_catalog():
         if not imdb_id:
             continue
 
-        # Ler os dados direto do JSON recebido pela API
         content_type = data.get("type", "movie")
         streams = data.get("streams", {})
 
-        # Separar Séries e Filmes buscando os metadados
         if content_type == "series" and isinstance(streams, dict) and len(series) < 25:
             meta = await fetch_cinemeta(imdb_id, "series")
             if meta: series.append(meta)
@@ -126,13 +145,13 @@ async def get_recent_catalog_cached(content_type):
                 with open(cache_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     return data.get(content_type, [])
-            except: pass
+            except Exception: pass
 
     catalogs = await build_recent_catalog()
     try:
         with open(cache_file, "w", encoding="utf-8") as f:
             json.dump(catalogs, f, ensure_ascii=False)
-    except: pass
+    except Exception: pass
 
     return catalogs.get(content_type, [])
 
@@ -158,13 +177,9 @@ async def manifest_endpoint():
         "idPrefixes": ["tt", "tmdb"]
     })
 
-# Adicionamos a segunda rota para suportar parâmetros extras como paginação
 @app.get("/catalog/{type}/{id}.json")
 @app.get("/catalog/{type}/{id}/{extra}.json")
 async def catalog_endpoint(type: str, id: str, extra: str = None):
-
-    # Se o Stremio estiver pedindo a página 2 em diante (skip=25, skip=50...)
-    # Por enquanto, retornamos vazio para ele parar de procurar e não dar erro.
     if extra and "skip" in extra:
         return JSONResponse(content={"metas": []})
 
@@ -186,7 +201,9 @@ async def stream(type: str, id: str, request: Request):
         try:
             parts = id.split(':')
             season, episode = int(parts[1]), int(parts[2])
-        except: pass
+        except Exception: pass
+
+    tmdb_id = await converter_imdb_para_tmdb(clean_id)
 
     def create_task(func, *args):
         if asyncio.iscoroutinefunction(func): return func(*args)
@@ -197,15 +214,25 @@ async def stream(type: str, id: str, request: Request):
         create_task(archive.search_serve, clean_id, type, season, episode)
     ]
 
+    if tmdb_id:
+        tasks.append(create_task(on.search_serve, tmdb_id, type, season, episode))
+
     resultados = await asyncio.gather(*tasks, return_exceptions=True)
     final_streams = []
 
     for res in resultados:
         if isinstance(res, list):
             for stream_info in res:
-                if "behaviorHints" in stream_info: del stream_info["behaviorHints"]
+                if "behaviorHints" in stream_info:
+                    del stream_info["behaviorHints"]
 
-                url = stream_info.get("url", "")
+                # --- EXTRAÇÃO AUTOMÁTICA DE STREAMTAPE PARA QUALQUER SCRAPER ---
+                url_atual = stream_info.get("url", "")
+                if url_atual and "streamtape" in url_atual.lower():
+                    # Usa o utils.py em thread separada para não bloquear o servidor
+                    url_resolvida = await asyncio.to_thread(utils.resolver_streamtape_url, url_atual)
+                    if url_resolvida:
+                        stream_info["url"] = url_resolvida
 
                 final_streams.append(stream_info)
 
@@ -221,13 +248,13 @@ async def meta_endpoint(type: str, id: str):
         try:
             resp = await client.get(url_tmdb, timeout=5)
             if resp.status_code == 200: return JSONResponse(content=resp.json())
-        except: pass
+        except Exception: pass
 
         url_cinemeta = f"https://v3-cinemeta.strem.io/meta/{type}/{id}.json"
         try:
             resp = await client.get(url_cinemeta, timeout=5)
             if resp.status_code == 200: return JSONResponse(content=resp.json())
-        except: pass
+        except Exception: pass
 
     return JSONResponse(content={"meta": {"id": id, "type": type, "name": f"Conteúdo {id}"}})
 
