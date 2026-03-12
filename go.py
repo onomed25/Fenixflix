@@ -201,9 +201,9 @@ def search_serve(titles, content_type, season=None, episode=None):
             continue
 
         final_streams.append({
-            "name": option["name"],
-            "title": "FeniFlix",
-            "url": f"{stream_url}\nGO",
+            "name": "FenixFlix",
+            "title": "Legendado\nGo" if "leg" in option["name"].lower() else "Dublado\nGo",
+            "url": stream_url,
             "behaviorHints": { "proxyHeaders": {"request": proxy_headers} }
         })
 
