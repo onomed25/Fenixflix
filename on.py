@@ -43,7 +43,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                 if iframe and iframe.get("src"):
                     src = iframe.get("src")
                     final_url = "https:" + src if src.startswith("//") else src
-                    print(f"[Azullog Debug] Fallback iframe encontrado: {final_url}")
                     streams.append({"name": "Azullog", "title": "Player Direto", "url": final_url})
                 else:
                     print("[Azullog Debug] Nenhum iframe de fallback encontrado.")
@@ -56,16 +55,13 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                 label = name_el.text.strip() if name_el else "Player"
 
                 print(f"\n[Azullog Debug] -> Processando player: '{label}'")
-                print(f"[Azullog Debug] Embed original: {data_embed}")
 
                 if not data_embed:
-                    print("[Azullog Debug] Sem data-embed. A ignorar...")
                     continue
 
                 # Regra antiga: converter filecdn para 1take
                 if "filecdn" in data_embed:
                     data_embed = re.sub(r"filecdn\d*\.site", "1take.lat", data_embed)
-                    print(f"[Azullog Debug] Substituído filecdn por 1take: {data_embed}")
 
                 try:
                     print(f"[Azullog Debug] Acessando link do embed...")
@@ -79,7 +75,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                         if player_url.startswith("//"):
                             player_url = "https:" + player_url
 
-                        print(f"[Azullog Debug] Encontrado player_2.php. URL: {player_url}")
 
                         # Acede ao player final para extrair o MediaFire
                         res3 = await client.get(player_url, headers={"referer": data_embed, "User-Agent": headers["User-Agent"]})
@@ -93,7 +88,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 
                             if mediafire_enc_match:
                                 mediafire_url = unquote(mediafire_enc_match.group(1))
-                                print(f"[Azullog Debug] URL do MediaFire identificada: {mediafire_url}")
 
                                 # Acede ao MediaFire para sacar o botão de Download direto
                                 print("[Azullog Debug] Acessando a página do MediaFire...")
