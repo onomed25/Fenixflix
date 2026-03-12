@@ -203,7 +203,7 @@ def search_serve(titles, content_type, season=None, episode=None):
         final_streams.append({
             "name": option["name"],
             "title": "FeniFlix",
-            "url": f"{fstream_url}\nGO",
+            "url": f"{stream_url}\nGO",
             "behaviorHints": { "proxyHeaders": {"request": proxy_headers} }
         })
 
