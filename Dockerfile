@@ -1,17 +1,15 @@
-# Usa uma imagem do Python como base
-FROM python:3.10-bullseye
+FROM python:3.10-slim
 
-# Define o diretório de trabalho no servidor
 WORKDIR /app
 
-# Copia todos os ficheiros do seu projeto para dentro do servidor
 COPY . .
 
-# Instala as dependências do Python
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Libera a porta 8000 para a internet
+RUN playwright install chromium --with-deps && rm -rf /var/lib/apt/lists/*
+
 EXPOSE 8000
 
-# Inicia o servidor Python diretamente
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
