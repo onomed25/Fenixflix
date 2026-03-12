@@ -9,7 +9,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 
     print(f"\n[Azullog Debug] Iniciando busca para TMDB ID: {tmdb_id} | Tipo: {content_type} | S{season}E{episode}")
 
-    # Monta a URL do Azullog usando o TMDB ID
     if content_type == "movie":
         url = f"https://azullog.site/filme/{tmdb_id}"
     else:
@@ -33,29 +32,25 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
             soup = BeautifulSoup(res.text, 'html.parser')
             select_items = soup.select("div.player_select_item")
 
-            # Fallback caso não tenha a lista de players, mas apenas um iframe na página principal
             if not select_items:
                 iframe = soup.select_one("iframe")
                 if iframe and iframe.get("src"):
                     src = iframe.get("src")
                     final_url = "https:" + src if src.startswith("//") else src
-                    streams.append({"name": "Azullog", "title": "Player Direto", "url": final_url})
+                    streams.append({"name": "FenixFlix", "description": "Player Direto\nAzullog", "url": final_url, "behaviorHints": {"notWebReady": False}})
                 else:
                     print("[Azullog Debug] Nenhum iframe de fallback encontrado.")
                 return streams
 
-            # Iterar pelos players disponíveis (Ex: Dublado, Legendado)
             for item in select_items:
                 data_embed = item.get("data-embed")
                 name_el = item.select_one("div.player_select_name")
                 label = name_el.text.strip() if name_el else "Player"
 
-                print(f"\n[Azullog Debug] -> Processando player: '{label}'")
 
                 if not data_embed:
                     continue
 
-                # Regra antiga: converter filecdn para 1take
                 if "filecdn" in data_embed:
                     data_embed = re.sub(r"filecdn\d*\.site", "1take.lat", data_embed)
 
@@ -64,28 +59,23 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                     res2 = await client.get(data_embed, headers={"referer": url, "User-Agent": headers["User-Agent"]})
                     soup2 = BeautifulSoup(res2.text, 'html.parser')
 
-                    # Procura o iframe do player_2.php que contém a API
                     iframe = soup2.select_one("iframe[src*='player_2.php']")
                     if iframe:
                         player_url = iframe.get("src")
                         if player_url.startswith("//"):
                             player_url = "https:" + player_url
 
-
-                        # Acede ao player final para extrair o MediaFire
                         res3 = await client.get(player_url, headers={"referer": data_embed, "User-Agent": headers["User-Agent"]})
                         api_url_match = re.search(r"const apiUrl = `([^`]+)`", res3.text)
 
                         if api_url_match:
                             api_url = api_url_match.group(1)
-                            print(f"[Azullog Debug] apiUrl encontrada: {api_url}")
 
                             mediafire_enc_match = re.search(r"[?&]url=([^&]+)", api_url)
 
                             if mediafire_enc_match:
                                 mediafire_url = unquote(mediafire_enc_match.group(1))
 
-                                # Acede ao MediaFire para sacar o botão de Download direto
                                 mf_res = await client.get(mediafire_url, headers={"Referer": player_url, "User-Agent": headers["User-Agent"]})
                                 mf_soup = BeautifulSoup(mf_res.text, 'html.parser')
                                 download_btn = mf_soup.select_one("a#downloadButton")
@@ -94,8 +84,9 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                                     final_mf_link = download_btn.get("href")
                                     streams.append({
                                         "name": "FenixFlix",
-                                        "title": f"{label}\nON",
-                                        "url": final_mf_link
+                                        "description": f"{label}\nON",
+                                        "url": final_mf_link,
+                                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-azullog"}
                                     })
                                     continue
                                 else:
@@ -107,7 +98,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                     else:
                         print("[Azullog Debug] iframe 'player_2.php' não encontrado.")
 
-                    # Se não passar na lógica do MediaFire, devolve o embed normal caso exista
                     print("[Azullog Debug] Tentando extrair um iframe genérico do embed...")
                     any_iframe = soup2.select_one("iframe")
                     if any_iframe and any_iframe.get("src"):
@@ -115,9 +105,10 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                         final_embed = "https:" + src if src.startswith("//") else src
                         print(f"[Azullog Debug] SUCESSO! Iframe genérico encontrado: {final_embed}")
                         streams.append({
-                            "name": "Azullog",
-                            "title": f"Embed - {label}",
-                            "url": final_embed
+                            "name": "FenixFlix",
+                            "description": f"Embed - {label}\nAzullog",
+                            "url": final_embed,
+                            "behaviorHints": {"notWebReady": False}
                         })
                     else:
                         print("[Azullog Debug] Nenhum iframe de vídeo encontrado neste player.")
@@ -128,8 +119,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
         except Exception as e:
             print(f"[Azullog Debug] Erro global na execução do scraper: {e}")
 
-
-    # Notifica o servidor se não encontrou nenhum stream
     if not streams:
         try:
             msg = f"[Azullog] Sem stream para {content_type}: TMDB {tmdb_id}"
@@ -137,7 +126,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                 msg += f" (T{season}E{episode})"
             async with httpx.AsyncClient() as notif_client:
                 await notif_client.get("http://87.106.82.84:14923/aviso_falta", params={"msg": msg}, timeout=3)
-            print(f"[Azullog Debug] Notificado servidor: {msg}")
         except Exception:
             pass
 
