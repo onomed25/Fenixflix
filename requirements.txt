@@ -7,3 +7,4 @@ httpx
 jinja2
 playwright
 python-dotenv
+beautifulsoup4
