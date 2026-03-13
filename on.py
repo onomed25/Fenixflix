@@ -119,14 +119,4 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
         except Exception as e:
             print(f"[Azullog Debug] Erro global na execução do scraper: {e}")
 
-    if not streams:
-        try:
-            msg = f"[Azullog] Sem stream para {content_type}: TMDB {tmdb_id}"
-            if content_type == "series" and season and episode:
-                msg += f" (T{season}E{episode})"
-            async with httpx.AsyncClient() as notif_client:
-                await notif_client.get("http://87.106.82.84:14923/aviso_falta", params={"msg": msg}, timeout=3)
-        except Exception:
-            pass
-
     return streams
