@@ -11,6 +11,7 @@ import os
 import time
 import json
 import uvicorn
+import atexit
 from dotenv import load_dotenv
 
 import serve
@@ -20,6 +21,9 @@ import on
 import go
 
 load_dotenv()
+
+# Fecha o browser do Playwright ao encerrar o processo
+atexit.register(go.close_browser)
 
 VERSION = "1.0.4"
 app = FastAPI()
@@ -43,10 +47,9 @@ CATALOG_CACHE_TIME = 6 * 60 * 60
 
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
-
-
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
+
 
 async def converter_imdb_para_tmdb(imdb_id: str):
     url = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id"
@@ -85,14 +88,19 @@ async def fetch_cinemeta(imdb_id, content_type):
                 if resp.status_code == 200:
                     meta = resp.json().get("meta", {})
                     if meta:
-                        return {"id": imdb_id, "type": content_type, "name": meta.get("name", f"Conteúdo {imdb_id}"), "poster": meta.get("poster"), "description": meta.get("description", "Sinopse não disponível.")}
+                        return {
+                            "id": imdb_id,
+                            "type": content_type,
+                            "name": meta.get("name", f"Conteúdo {imdb_id}"),
+                            "poster": meta.get("poster"),
+                            "description": meta.get("description", "Sinopse não disponível.")
+                        }
             except Exception:
                 pass
     return {"id": imdb_id, "type": content_type, "name": f"Conteúdo {imdb_id}"}
 
 async def obter_titulos_publicos(imdb_id, content_type):
     titulos = []
-
     tmdb_type = "movie" if content_type == "movie" else "tv"
     url_tmdb_ptbr = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"
     url_tmdb_orig = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=en-US"
@@ -194,6 +202,7 @@ async def get_recent_catalog_cached(content_type):
         pass
     return catalogs.get(content_type, [])
 
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     manifest_data = {"name": "FENIXFLIX", "description": "Addon de Filmes e Séries", "types": ["movie", "series"]}
@@ -240,7 +249,6 @@ async def stream(type: str, id: str, request: Request):
         except Exception:
             pass
 
-
     tmdb_id = await converter_imdb_para_tmdb(clean_id)
     titles_to_search = await obter_titulos_publicos(clean_id, type)
 
@@ -274,7 +282,6 @@ async def stream(type: str, id: str, request: Request):
                         "bingeGroup": "fenixflix"
                     }
                 todos_streams.append(stream_info)
-
 
     if not todos_streams:
         asyncio.create_task(notificar_falta_servidor(clean_id, type, season, episode))

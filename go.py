@@ -2,10 +2,79 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote, urljoin
 import re
+import threading
+import time as _time
 
+# ─────────────────────────────────────────────
+#  Singleton do Playwright
+# ─────────────────────────────────────────────
+_playwright_instance = None
+_browser_instance = None
+_browser_lock = threading.Lock()
+
+def get_browser():
+    global _playwright_instance, _browser_instance
+    with _browser_lock:
+        if _browser_instance is None or not _browser_instance.is_connected():
+            try:
+                from playwright.sync_api import sync_playwright
+                if _playwright_instance:
+                    try:
+                        _playwright_instance.stop()
+                    except Exception:
+                        pass
+                _playwright_instance = sync_playwright().start()
+                _browser_instance = _playwright_instance.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",       # não usa /dev/shm (economiza RAM)
+                        "--disable-gpu",                  # sem GPU
+                        "--disable-extensions",           # sem extensões
+                        "--disable-background-networking",
+                        "--disable-sync",
+                        "--disable-translate",
+                        "--disable-default-apps",
+                        "--mute-audio",
+                        "--no-first-run",
+                        "--disable-infobars",
+                        "--disable-features=site-per-process",  # reduz processos isolados
+                        "--js-flags=--max-old-space-size=128",  # limita heap JS a 128MB
+                        "--memory-pressure-off",
+                        "--single-process",              # tudo num processo só (menos RAM)
+                    ]
+                )
+                print("[GO - Browser] Instância do Chromium iniciada com sucesso.")
+            except Exception as e:
+                print(f"[GO - Browser] Erro ao iniciar Chromium: {e}")
+                return None
+    return _browser_instance
+
+def close_browser():
+    global _playwright_instance, _browser_instance
+    with _browser_lock:
+        if _browser_instance:
+            try:
+                _browser_instance.close()
+                print("[GO - Browser] Browser encerrado.")
+            except Exception:
+                pass
+            _browser_instance = None
+        if _playwright_instance:
+            try:
+                _playwright_instance.stop()
+                print("[GO - Browser] Playwright encerrado.")
+            except Exception:
+                pass
+            _playwright_instance = None
+
+
+# ─────────────────────────────────────────────
+#  Busca no GoFilmes
+# ─────────────────────────────────────────────
 def search_gofilmes(titles, content_type, season=None, episode=None):
     """
-    Busca por um filme ou série no gofilmes e retorna o link do player para o item específico.
+    Busca por um filme ou série no GoFilmes e retorna o link do player para o item específico.
     """
     base_url = "https://gofilmess.top"
     print(f"\n[DEBUG - GO] Iniciando busca no GoFilmes para: {titles} | Tipo: {content_type}")
@@ -15,10 +84,9 @@ def search_gofilmes(titles, content_type, season=None, episode=None):
         selector = 'div.ep a[href]'
     else:
         path = ''
-        selector = '.player_select_item a[href], div.link a[href]'  # fallback para ambos
+        selector = '.player_select_item a[href], div.link a[href]'
 
     for title in titles:
-        # CORRIGIDO: usando a mesma lógica do gofilmes.py antigo que funcionava
         search_slug = title.replace('.', '').replace(' ', '-').lower()
 
         if path:
@@ -64,15 +132,18 @@ def search_gofilmes(titles, content_type, season=None, episode=None):
 
     return []
 
+
+# ─────────────────────────────────────────────
+#  Resolve o stream final
+# ─────────────────────────────────────────────
 def resolve_stream(player_url):
     """
     Recebe a URL da página do player do GoFilmes e extrai o link do stream final.
-    Tenta requests+BeautifulSoup primeiro; se resultado for blob://, usa Playwright.
+    Tenta requests+BeautifulSoup primeiro; se necessário, usa Playwright com instância singleton.
     """
-    stream_url = ''
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-    # --- ETAPA 1: Tentativa rápida com requests ---
+    # ── ETAPA 1: Tentativa rápida com requests ──
     try:
         page_headers = headers.copy()
         page_headers.update({'Referer': 'https://gofilmess.top/'})
@@ -115,58 +186,70 @@ def resolve_stream(player_url):
     except Exception:
         pass
 
-    # --- ETAPA 2: Playwright para capturar o .m3u8 real por trás do blob ---
+    # ── ETAPA 2: Playwright com instância singleton ──
+    stream_url = ''
     try:
-        from playwright.sync_api import sync_playwright
+        browser = get_browser()
+        if browser is None:
+            print("[DEBUG - GO] Browser indisponível, pulando Playwright.")
+            return stream_url, headers
 
         captured_url = None
+        captured_lock = threading.Lock()
 
         def intercept(request):
             nonlocal captured_url
+            with captured_lock:
+                if captured_url:
+                    return
             url = request.url
-            if captured_url:
-                return
             if url.startswith('blob:'):
                 return
-            # Captura por extensão conhecida de stream
             extensoes = ('.m3u8', '.mp4', '.mkv', '.ts')
-            # Captura por padrão de URL de stream (ex: master.txt?...&cache=)
             padrao_stream = 'm3u8' in url or 'master.txt' in url or '/stream/' in url or 'cache=' in url
             if any(url.split('?')[0].endswith(e) for e in extensoes) or padrao_stream:
-                captured_url = url
+                with captured_lock:
+                    captured_url = url
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent=headers["User-Agent"],
-                extra_http_headers={"Referer": "https://gofilmess.top/"}
-            )
-            page = context.new_page()
-            page.on("request", intercept)
+        # Usa um contexto isolado por request (não compartilha cookies/estado)
+        context = browser.new_context(
+            user_agent=headers["User-Agent"],
+            extra_http_headers={"Referer": "https://gofilmess.top/"}
+        )
+        page = context.new_page()
+        page.on("request", intercept)
 
-            # Tenta navegar, ignora timeout pois a URL pode já ter sido capturada
-            try:
-                page.goto(player_url, timeout=20000, wait_until="domcontentloaded")
-            except Exception:
-                pass
+        try:
+            page.goto(player_url, timeout=20000, wait_until="domcontentloaded")
+        except Exception:
+            pass
 
-            # Aguarda até 10s para a URL aparecer mesmo após erro de timeout
-            import time as _time
-            for _ in range(20):
+        # Aguarda até 10s para a URL aparecer
+        for _ in range(20):
+            with captured_lock:
                 if captured_url:
                     break
-                _time.sleep(0.5)
+            _time.sleep(0.5)
 
-            browser.close()
+        # Fecha apenas o contexto, NÃO o browser
+        try:
+            context.close()
+        except Exception:
+            pass
 
-        if captured_url:
-            stream_url = captured_url
+        with captured_lock:
+            if captured_url:
+                stream_url = captured_url
 
     except Exception as e:
         print(f"[DEBUG - GO] Playwright falhou: {e}")
 
     return stream_url, headers
 
+
+# ─────────────────────────────────────────────
+#  Notificação de falta
+# ─────────────────────────────────────────────
 def notificar_falta_go(titles, content_type, season=None, episode=None):
     """Avisa o servidor que o GoFilmes não encontrou stream válido."""
     titulo = titles[0] if titles else "desconhecido"
@@ -182,6 +265,10 @@ def notificar_falta_go(titles, content_type, season=None, episode=None):
     except Exception:
         pass
 
+
+# ─────────────────────────────────────────────
+#  Função principal chamada pelo app.py
+# ─────────────────────────────────────────────
 def search_serve(titles, content_type, season=None, episode=None):
     """
     Função orquestradora que o app.py chama para buscar e já devolver o link final.
@@ -204,12 +291,12 @@ def search_serve(titles, content_type, season=None, episode=None):
             "name": "FenixFlix",
             "title": "Legendado\nGo" if "leg" in option["name"].lower() else "Dublado\nGo",
             "url": stream_url,
-            "behaviorHints": { "proxyHeaders": {"request": proxy_headers} }
+            "behaviorHints": {"proxyHeaders": {"request": proxy_headers}}
         })
 
         print(f"[DEBUG - GO] Stream aceito: {stream_url}")
 
-        # Limita a 2 resoluções para não estourar o tempo limite do Stremio
+        # Limita a 2 streams para não estourar o tempo limite do Stremio
         if len(final_streams) >= 2:
             print("[DEBUG - GO] Limite de streams atingido.")
             break
