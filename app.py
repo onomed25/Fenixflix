@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -17,6 +17,8 @@ import serve
 import archive
 import justwatch
 import on
+import go
+import fshd
 
 load_dotenv()
 
@@ -44,7 +46,6 @@ TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
-
 
 async def converter_imdb_para_tmdb(imdb_id: str):
     url = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id"
@@ -93,6 +94,62 @@ async def fetch_cinemeta(imdb_id, content_type):
             except Exception:
                 pass
     return {"id": imdb_id, "type": content_type, "name": f"Conteúdo {imdb_id}"}
+
+async def obter_titulos_publicos(imdb_id, content_type):
+    titulos = []
+    tmdb_type = "movie" if content_type == "movie" else "tv"
+    url_tmdb_ptbr = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"
+    url_tmdb_orig = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=en-US"
+    url_ptbr_addon = f"https://94c8cb9f702d-tmdb-addon.baby-beamup.club/pt-BR/meta/{content_type}/{imdb_id}.json"
+    url_cinemeta = f"https://v3-cinemeta.strem.io/meta/{content_type}/{imdb_id}.json"
+
+    async with httpx.AsyncClient() as client:
+        try:
+            req_ptbr, req_orig = await asyncio.gather(
+                client.get(url_tmdb_ptbr, timeout=5),
+                client.get(url_tmdb_orig, timeout=5),
+                return_exceptions=True
+            )
+
+            def extrair_nome_tmdb(resp, tipo):
+                if isinstance(resp, Exception) or resp.status_code != 200:
+                    return None
+                data = resp.json()
+                results = data.get(f"{tipo}_results", [])
+                if results:
+                    return results[0].get("title") or results[0].get("name")
+                return None
+
+            nome_ptbr = extrair_nome_tmdb(req_ptbr, tmdb_type)
+            nome_orig = extrair_nome_tmdb(req_orig, tmdb_type)
+
+            if nome_ptbr:
+                titulos.append(nome_ptbr)
+            if nome_orig and nome_orig not in titulos:
+                titulos.append(nome_orig)
+
+        except Exception as e:
+            print(f"[DEBUG - APP] Falha no TMDB direto: {e}")
+
+        if not titulos:
+            try:
+                req_pt_addon, req_cinemeta = await asyncio.gather(
+                    client.get(url_ptbr_addon, timeout=5),
+                    client.get(url_cinemeta, timeout=5),
+                    return_exceptions=True
+                )
+                if not isinstance(req_pt_addon, Exception) and req_pt_addon.status_code == 200:
+                    nome_pt = req_pt_addon.json().get("meta", {}).get("name")
+                    if nome_pt and not nome_pt.startswith("Conteúdo "):
+                        titulos.append(nome_pt)
+                if not isinstance(req_cinemeta, Exception) and req_cinemeta.status_code == 200:
+                    nome_en = req_cinemeta.json().get("meta", {}).get("name")
+                    if nome_en and not nome_en.startswith("Conteúdo ") and nome_en not in titulos:
+                        titulos.append(nome_en)
+            except Exception as e:
+                print(f"[DEBUG - APP] Falha nos addons públicos: {e}")
+
+    return titulos
 
 async def build_recent_catalog():
     url = "http://87.106.82.84:14923/api/all"
@@ -189,6 +246,7 @@ async def stream(type: str, id: str, request: Request):
             pass
 
     tmdb_id = await converter_imdb_para_tmdb(clean_id)
+    titles_to_search = await obter_titulos_publicos(clean_id, type)
 
     def create_task(func, *args):
         if asyncio.iscoroutinefunction(func):
@@ -201,6 +259,9 @@ async def stream(type: str, id: str, request: Request):
     ]
     if tmdb_id:
         tasks.append(create_task(on.search_serve, tmdb_id, type, season, episode))
+        tasks.append(create_task(fshd.search_serve, tmdb_id, type, season, episode))
+    if titles_to_search:
+        tasks.append(create_task(go.search_serve, titles_to_search, type, season, episode))
 
     resultados = await asyncio.gather(*tasks, return_exceptions=True)
     todos_streams = []
