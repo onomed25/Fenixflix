@@ -27,21 +27,39 @@ def get_browser():
                 _browser_instance = _playwright_instance.chromium.launch(
                     headless=True,
                     args=[
+                        # ── Segurança / container ──
                         "--no-sandbox",
-                        "--disable-dev-shm-usage",       # não usa /dev/shm (economiza RAM)
-                        "--disable-gpu",                  # sem GPU
-                        "--disable-extensions",           # sem extensões
+                        "--disable-setuid-sandbox",
+                        "--no-zygote",
+
+                        # ── RAM ──
+                        "--disable-dev-shm-usage",
+                        "--single-process",
+                        "--js-flags=--max-old-space-size=128",
+                        "--disable-features=site-per-process",
+
+                        # ── GPU (não existe no container) ──
+                        "--disable-gpu",
+                        "--disable-gpu-sandbox",
+                        "--disable-software-rasterizer",
+                        "--disable-webgl",
+                        "--disable-accelerated-2d-canvas",
+
+                        # ── Áudio / dbus / bluetooth (não existem no container) ──
+                        "--mute-audio",
+                        "--disable-audio-output",
+                        "--use-fake-ui-for-media-stream",
+                        "--use-fake-device-for-media-stream",
+                        "--disable-features=AudioServiceOutOfProcess,BluetoothSerialChooser,VizDisplayCompositor",
+
+                        # ── Misc ──
+                        "--disable-extensions",
                         "--disable-background-networking",
                         "--disable-sync",
                         "--disable-translate",
                         "--disable-default-apps",
-                        "--mute-audio",
                         "--no-first-run",
                         "--disable-infobars",
-                        "--disable-features=site-per-process",  # reduz processos isolados
-                        "--js-flags=--max-old-space-size=128",  # limita heap JS a 128MB
-                        "--memory-pressure-off",
-                        "--single-process",              # tudo num processo só (menos RAM)
                     ]
                 )
                 print("[GO - Browser] Instância do Chromium iniciada com sucesso.")
@@ -224,8 +242,40 @@ def resolve_stream(player_url):
         except Exception:
             pass
 
-        # Aguarda até 10s para a URL aparecer
-        for _ in range(20):
+        # Aguarda o DOM estar completamente pronto
+        try:
+            page.wait_for_load_state("networkidle", timeout=5000)
+        except Exception:
+            pass
+
+        # O erro "Cannot set properties of null (setting 'onclick')" acontece porque
+        # o JS roda antes do elemento existir no DOM.
+        # Clicar manualmente no botão de play contorna isso e dispara o carregamento do stream.
+        try:
+            seletores_play = [
+                "button.play",
+                "div.play",
+                "#play",
+                ".play-btn",
+                "video",
+                ".jw-display-icon-container",  # JWPlayer
+                ".plyr__control--overlaid",    # Plyr
+                "[aria-label=\'Play\']",
+            ]
+            for seletor in seletores_play:
+                try:
+                    el = page.wait_for_selector(seletor, timeout=2000)
+                    if el:
+                        el.click()
+                        print(f"[DEBUG - GO] Clicou em: {seletor}")
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # Aguarda até 12s para a URL de stream aparecer após o clique
+        for _ in range(24):
             with captured_lock:
                 if captured_url:
                     break
