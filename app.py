@@ -19,6 +19,7 @@ import justwatch
 import on
 import go
 import fshd
+import fimoo  # <-- IMPORTAÇÃO DO FIMOO ADICIONADA AQUI
 
 load_dotenv()
 
@@ -260,6 +261,9 @@ async def stream(type: str, id: str, request: Request):
     if tmdb_id:
         tasks.append(create_task(on.search_serve, tmdb_id, type, season, episode))
         tasks.append(create_task(fshd.search_serve, tmdb_id, type, season, episode))
+        # ---> FIMOO ADICIONADO AQUI <---
+        tasks.append(create_task(fimoo.search_serve, tmdb_id, type, season, episode))
+
     if titles_to_search:
         tasks.append(create_task(go.search_serve, titles_to_search, type, season, episode))
 
