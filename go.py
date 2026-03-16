@@ -1,152 +1,310 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urljoin, urlparse
 import re
+import json
+import base64
+import hashlib
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
+import logging
 
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------
+# SESSÃO GLOBAL (Melhoria de Performance)
+# ---------------------------------------------------------
+session = requests.Session()
+session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+
+# ---------------------------------------------------------
+# FUNÇÕES DE CRIPTOGRAFIA (AES)
+# ---------------------------------------------------------
+def evp_kdf(password, salt, key_size, iv_size):
+    d = d_i = b''
+    while len(d) < key_size + iv_size:
+        d_i = hashlib.md5(d_i + password + salt).digest()
+        d += d_i
+    return d[:key_size], d[key_size:key_size+iv_size]
+
+def descriptografar_link(encrypted_str, password):
+    try:
+        obj = json.loads(encrypted_str)
+        salt = bytes.fromhex(obj['s'])
+        ct = base64.b64decode(obj['ct'])
+        iv = bytes.fromhex(obj['iv'])
+        key, _ = evp_kdf(password.encode('utf-8'), salt, 32, 16)
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        decrypted = unpad(cipher.decrypt(ct), AES.block_size)
+        return decrypted.decode('utf-8').replace('"', '')
+    except Exception as e:
+        logger.debug(f"Erro ao descriptografar: {e}")
+        return None
+
+def decodificar_ck(ck_raw):
+    try:
+        hexvals = re.findall(r'\\x([0-9a-fA-F]{2})', ck_raw)
+        if hexvals:
+            b64_str = bytes.fromhex(''.join(hexvals)).decode('utf-8')
+            try:
+                return base64.b64decode(b64_str + '==').decode('utf-8')
+            except Exception:
+                return b64_str
+        return ck_raw
+    except:
+        return ck_raw
+
+# ---------------------------------------------------------
+# RESOLVER MASTER.TXT
+# ---------------------------------------------------------
+def resolver_master_txt(master_url, referer):
+    headers = {'Referer': referer}
+    try:
+        res = session.get(master_url, headers=headers, timeout=10)
+        conteudo = res.text.strip()
+        base = master_url.rsplit('/master.txt', 1)[0]
+
+        b64s = re.findall(r'([a-zA-Z0-9+/]{30,}={0,2})', conteudo)
+        for b64 in reversed(b64s):
+            try:
+                caminho = base64.b64decode(b64 + '==').decode('utf-8').strip()
+                if caminho.endswith('.m3u8') or '/hls/' in caminho:
+                    return caminho if caminho.startswith('http') else base + '/' + caminho.lstrip('/')
+            except:
+                continue
+
+        for linha in conteudo.splitlines():
+            linha = linha.strip()
+            if linha.endswith('.m3u8') or '/hls/' in linha:
+                return linha if linha.startswith('http') else base + '/' + linha.lstrip('/')
+    except Exception as e:
+        logger.debug(f"Erro ao resolver master.txt: {e}")
+    return None
+
+# ---------------------------------------------------------
+# EXTRATOR EMBEDPLAYER1
+# ---------------------------------------------------------
+def extrair_embedplayer1(url_video):
+    video_id = url_video.split('/')[-1].split('?')[0]
+    api_url = 'https://embedplayer1.xyz/player/index.php?data=' + video_id + '&do=getVideo'
+
+    headers_get  = {'Referer': 'https://gofilmeshd.top/'}
+    headers_post = {**headers_get, 'X-Requested-With': 'XMLHttpRequest'}
+
+    try:
+        session.get(url_video, headers=headers_get, timeout=10)
+        response = session.post(api_url, headers=headers_post, data={'hash': video_id, 'r': 'https://gofilmeshd.top/'}, timeout=10)
+
+        dados = response.json()
+
+        secured = dados.get('securedLink', '')
+        if secured and '.m3u8' in secured:
+            return secured
+
+        video_source = dados.get('videoSource', '')
+        if video_source:
+            if 'master.txt' in video_source:
+                url_real = resolver_master_txt(video_source, 'https://embedplayer1.xyz/')
+                if url_real:
+                    return url_real
+            if video_source.endswith('.m3u8') or '/hls/' in video_source:
+                return video_source
+
+        ck_raw   = dados.get('ck', '')
+        chave_ck = decodificar_ck(ck_raw) if ck_raw else ''
+        if 'videoSources' in dados:
+            for source in dados['videoSources']:
+                raw_file = source.get('file', '')
+                if '{"ct":' in raw_file:
+                    dec = descriptografar_link(raw_file, chave_ck)
+                    if dec:
+                        if dec.startswith('http'): return dec
+                        if '/m3/' in dec or '/hls/' in dec: return urljoin('https://embedplayer1.xyz', dec)
+                elif raw_file.startswith('http'): return raw_file
+                elif '/m3/' in raw_file or '/hls/' in raw_file: return urljoin('https://embedplayer1.xyz', raw_file)
+
+        return None
+    except Exception as e:
+        logger.debug(f"Erro no embedplayer1: {e}")
+        return None
+
+# ---------------------------------------------------------
+# GERAR VARIAÇÕES DO SLUG PARA BUSCA
+# ---------------------------------------------------------
+def gerar_slugs(title):
+    limpo = re.sub(r'[^\w\s-]', '', title)
+    limpo = re.sub(r'\s+', ' ', limpo).strip()
+    slug_principal = re.sub(r'-+', '-', limpo.replace(' ', '-')).lower()
+
+    slugs = [slug_principal]
+
+    sem_artigos = re.sub(r'\b(o|a|os|as|the|de|da|do|dos|das|em|por|para)\b', '', limpo, flags=re.IGNORECASE)
+    sem_artigos = re.sub(r'\s+', ' ', sem_artigos).strip()
+    slug_sem_artigos = re.sub(r'-+', '-', sem_artigos.replace(' ', '-')).lower()
+    if slug_sem_artigos != slug_principal:
+        slugs.append(slug_sem_artigos)
+
+    palavras = limpo.split()
+    if len(palavras) > 3:
+        slug_curto = '-'.join(palavras[:3]).lower()
+        slugs.append(slug_curto)
+
+    return slugs
+
+# ---------------------------------------------------------
+# BUSCA PRINCIPAL DE OPÇÕES
+# ---------------------------------------------------------
 def search_gofilmes(titles, content_type, season=None, episode=None):
-    """
-    Busca por um filme ou série no gofilmes e retorna o link do player para o item específico.
-    """
-    base_url = "https://gofilmess.top"
+    base_url = 'https://gofilmeshd.top'
+    path     = 'series' if content_type == 'series' else ''
+    selector = 'div.ep a[href]' if content_type == 'series' else 'div.link a[href]'
 
-    if content_type == 'series':
-        path = 'series'
-        selector = 'div.ep a[href]'
-    else:
-        path = ''
-        selector = 'div.link a[href]'
-
+    slugs_para_tentar = []
     for title in titles:
-        search_slug = title.replace('.', '').replace(' ', '-').lower()
+        slugs_para_tentar.extend(gerar_slugs(title))
 
-        if path:
-            url = f"{base_url}/{path}/{quote(search_slug)}"
-        else:
-            url = f"{base_url}/{quote(search_slug)}"
+    vistos = set()
+    slugs_unicos = []
+    for s in slugs_para_tentar:
+        if s not in vistos:
+            vistos.add(s)
+            slugs_unicos.append(s)
 
+    for slug in slugs_unicos:
+        url = f"{base_url}/{path}/{quote(slug)}" if path else f"{base_url}/{quote(slug)}"
+        logger.debug(f"Tentando URL: {url}")
         try:
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'}
-            response = requests.get(url, headers=headers, timeout=10)
-
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                player_options = []
-
-                player_links = soup.select(selector)
-                if not player_links:
+            res = session.get(url, timeout=10)
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, 'html.parser')
+                links = soup.select(selector)
+                if not links:
                     continue
-
-                if content_type == 'series':
-                    if episode and 0 < episode <= len(player_links):
-                        target_link = player_links[episode - 1]
-                        player_options.append({
-                            "name": f"GoFilmes - S{season}E{episode}",
-                            "url": urljoin(base_url, target_link.get('href'))
+                opts = []
+                if content_type == 'series' and episode:
+                    if 0 < episode <= len(links):
+                        opts.append({
+                            'name': f"GoFilmes - S{season}E{episode}",
+                            'url': urljoin(base_url, links[episode - 1].get('href'))
                         })
                 else:
-                    for link in player_links:
-                        player_options.append({
-                            "name": f"GoFilmes - {link.get_text(strip=True)}",
-                            "url": urljoin(base_url, link.get('href'))
+                    for l in links:
+                        opts.append({
+                            'name': f"GoFilmes - {l.get_text(strip=True)}",
+                            'url': urljoin(base_url, l.get('href'))
                         })
-
-                if player_options:
-                    return player_options
-
-        except requests.RequestException:
-            pass
-        except Exception:
-            pass
+                if opts:
+                    return opts
+        except Exception as e:
+            logger.debug(f"Erro ao buscar slug '{slug}': {e}")
 
     return []
 
+# ---------------------------------------------------------
+# RESOLVER STREAM FINAL
+# ---------------------------------------------------------
 def resolve_stream(player_url):
-    """
-    Recebe a URL da página do player do GoFilmes e extrai o link do stream final.
-    """
-    stream_url = ''
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, como Gecko) Chrome/88.0.4324.96 Safari/537.36"}
-
     try:
-        page_headers = headers.copy()
-        page_headers.update({'Referer': 'https://gofilmess.top/'})
+        r    = session.get(player_url, timeout=10)
+        html = r.text
 
-        r = requests.get(player_url, headers=page_headers, timeout=10, allow_redirects=True)
-        soup = BeautifulSoup(r.text, 'html.parser')
+        # 1. VERIFICA SE O LINK JÁ ESTÁ NA PRÓPRIA PÁGINA
+        m_match = re.search(r"const\s+videoSrc\s*=\s*['\"]([^'\"]+)['\"]", html)
+        if not m_match:
+            m_match = re.search(r'(https?://[^"\'\s]+/master\.txt[^"\'\s]*)', html)
 
+        if m_match:
+            m_url    = m_match.group(1).split('#')[0]
+            referer  = 'https://watch.brstream.cc/' if 'brstream' in m_url else 'https://gofilmeshd.top/'
+            url_real = resolver_master_txt(m_url, referer)
+            return url_real or m_url, {'Referer': referer, 'Origin': referer.rstrip('/')}
+
+        # Procura Mediafire direto na página principal
+        mf_match = re.search(r'(https?://[^\s"\']+mediafire\.com[^\s"\']*)', html)
+        if mf_match:
+            logger.debug(f"Mediafire encontrado na página principal: {mf_match.group(1)}")
+            return mf_match.group(1), {'Referer': player_url}
+
+        # 2. PROCURA POR IFRAMES
+        soup   = BeautifulSoup(html, 'html.parser')
         iframe = soup.find('iframe')
-        if iframe and iframe.has_attr('src'):
-            stream_url = iframe['src']
-            return stream_url, headers
+        src    = iframe.get('src') if iframe else None
 
-        video_tag = soup.find('video')
-        if video_tag:
-            source_tag = video_tag.find('source')
-            if source_tag and source_tag.has_attr('src'):
-                stream_url = source_tag['src']
-                return stream_url, headers
+        if src:
+            if src.startswith('//'):
+                src = 'https:' + src
 
-        scripts = soup.find_all('script')
-        for script in scripts:
-            if script.string and 'playlist' in script.string:
-                match = re.search(r'"file"\s*:\s*"([^"]+)"', script.string)
-                if match:
-                    stream_url = match.group(1)
-                    return stream_url, headers
+            # EmbedPlayer1
+            if 'embedplayer1.xyz' in src:
+                link = extrair_embedplayer1(src)
+                if link:
+                    return link, {'Referer': 'https://embedplayer1.xyz/', 'Origin': 'https://embedplayer1.xyz'}
 
-        api_url = None
-        for script in scripts:
-            if script.string and 'fetchVideoLink' in script.string:
-                match = re.search(r'const apiUrl = `([^`]+)`;', script.string)
-                if match:
-                    api_url = match.group(1)
-                    api_headers = headers.copy()
-                    api_headers['Referer'] = player_url
+            # Player 112234152
+            elif '112234152.xyz' in src:
+                vid        = src.split('?data=')[-1].split('&')[0]
+                master_url = f'https://112234152.xyz/hls/{vid}/master.txt'
+                referer    = 'https://112234152.xyz/'
+                url_real   = resolver_master_txt(master_url, referer)
+                return url_real or f'https://112234152.xyz/hls/{vid}/index.m3u8', {'Referer': referer}
 
-                    api_response = requests.get(api_url, headers=api_headers, timeout=15)
-                    api_response.raise_for_status()
+            # Iframe é direto do Mediafire
+            elif 'mediafire.com' in src:
+                logger.debug(f"Mediafire encontrado direto no iframe: {src}")
+                return src, {'Referer': player_url}
 
-                    stream_url = api_response.text.strip()
-                    return stream_url, headers
+            # Fallback genérico — acessa o iframe e procura o link lá dentro
+            else:
+                res_iframe = session.get(src, headers={'Referer': player_url}, timeout=10)
 
-    except Exception:
-        pass
+                # Procura videoSrc
+                m_match = re.search(r"const\s+videoSrc\s*=\s*['\"]([^'\"]+)['\"]", res_iframe.text)
+                if m_match:
+                    stream_url = m_match.group(1)
+                    origin     = f"https://{urlparse(src).netloc}"
+                    return stream_url, {'Origin': origin, 'Referer': origin + '/'}
 
-    return stream_url, headers
+                # Procura master.txt
+                m_match = re.search(r'(https?://[^"\'\s]+/master\.txt[^"\'\s]*)', res_iframe.text)
+                if m_match:
+                    m_url    = m_match.group(1).split('#')[0]
+                    referer  = f"https://{urlparse(src).netloc}/"
+                    url_real = resolver_master_txt(m_url, referer)
+                    return url_real or m_url, {'Referer': referer, 'Origin': referer.rstrip('/')}
+
+                # Procura Mediafire dentro do iframe
+                mf_match = re.search(r'(https?://[^\s"\']+mediafire\.com[^\s"\']*)', res_iframe.text)
+                if mf_match:
+                    logger.debug(f"Mediafire encontrado dentro do iframe: {mf_match.group(1)}")
+                    return mf_match.group(1), {'Referer': src}
+
+    except Exception as e:
+        logger.error(f"Erro no resolve_stream: {e}")
+
+    return '', {}
 
 # ---------------------------------------------------------
-# NOVA FUNÇÃO ADICIONADA: Filtro e Orquestração
+# ENTRY POINT DO ADDON
 # ---------------------------------------------------------
 def search_serve(titles, content_type, season=None, episode=None):
-    """
-    Função orquestradora que o app.py chama para buscar e já devolver o link final filtrado.
-    """
-    player_options = search_gofilmes(titles, content_type, season, episode)
-    final_streams = []
+    options = search_gofilmes(titles, content_type, season, episode)
+    results = []
 
-    for option in player_options:
-        stream_url, proxy_headers = resolve_stream(option["url"])
-        if not stream_url:
-            continue
+    for opt in options:
+        url, head = resolve_stream(opt['url'])
 
-        # Só aceita Mediafire ou master.txt — os outros dão erro de reprodução
-        url_lower = stream_url.lower()
-        if "mediafire" not in url_lower and "master.txt" not in url_lower:
-            print(f"[DEBUG - GO] URL ignorada (não é Mediafire nem master.txt): {stream_url}")
-            continue
+        if url and ('master.txt' in url or '.m3u8' in url or 'mediafire' in url or '.mp4' in url):
+            entry = {
+                'name': 'FenixFlix',
+                'title': 'Leg/Dub\nGO',
+                'url': url,
+            }
+            if head:
+                entry['behaviorHints'] = {'proxyHeaders': {'request': head}}
+            results.append(entry)
+            logger.debug(f"Stream aceito: {url}")
 
-        final_streams.append({
-            "name": "FenixFlix",
-            "title": "Legendado\nGo" if "leg" in option["name"].lower() else "Dublado\nGo",
-            "url": stream_url,
-            "behaviorHints": {"proxyHeaders": {"request": proxy_headers}}
-        })
-
-        print(f"[DEBUG - GO] Stream aceito: {stream_url}")
-
-        # Limita a 2 streams para não estourar o tempo limite do Stremio
-        if len(final_streams) >= 2:
-            print("[DEBUG - GO] Limite de streams atingido.")
+        if len(results) >= 2:
             break
 
-    return final_streams
+    return results
