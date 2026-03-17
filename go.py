@@ -157,7 +157,6 @@ def gerar_slugs(title):
 def search_gofilmes(titles, content_type, season=None, episode=None):
     base_url = 'https://gofilmeshd.top'
     path     = 'series' if content_type == 'series' else ''
-    selector = 'div.ep a[href]' if content_type == 'series' else 'div.link a[href]'
 
     slugs_para_tentar = []
     for title in titles:
@@ -177,22 +176,47 @@ def search_gofilmes(titles, content_type, season=None, episode=None):
             res = session.get(url, timeout=10)
             if res.status_code == 200:
                 soup = BeautifulSoup(res.text, 'html.parser')
-                links = soup.select(selector)
-                if not links:
-                    continue
                 opts = []
-                if content_type == 'series' and episode:
-                    if 0 < episode <= len(links):
-                        opts.append({
-                            'name': f"GoFilmes - S{season}E{episode}",
-                            'url': urljoin(base_url, links[episode - 1].get('href'))
-                        })
+
+                if content_type == 'series' and season and episode:
+                    # Busca os botões de temporada e os painéis de episódios
+                    buttons = soup.select('div.temps button.accordion')
+                    panels = soup.select('div.temps div.panel')
+
+                    target_panel = None
+
+                    # 1. Tenta encontrar a temporada correta pelo texto do botão (Ex: "2º Temporada")
+                    for i, btn in enumerate(buttons):
+                        btn_text = btn.get_text(strip=True)
+                        match = re.search(r'(\d+)º?\s*[Tt]emporada', btn_text, re.IGNORECASE)
+                        if match and int(match.group(1)) == int(season):
+                            if i < len(panels):
+                                target_panel = panels[i]
+                            break
+
+                    # 2. Fallback: Tenta acessar pelo índice caso o regex falhe
+                    if not target_panel and len(panels) >= int(season):
+                        target_panel = panels[int(season) - 1]
+
+                    # 3. Extrai os episódios apenas do painel da temporada certa
+                    if target_panel:
+                        links = target_panel.select('div.ep a[href]')
+                        ep_idx = int(episode) - 1
+
+                        if 0 <= ep_idx < len(links):
+                            opts.append({
+                                'name': f"GoFilmes - S{season}E{episode}",
+                                'url': urljoin(base_url, links[ep_idx].get('href'))
+                            })
                 else:
+                    # Filmes
+                    links = soup.select('div.link a[href]')
                     for l in links:
                         opts.append({
                             'name': f"GoFilmes - {l.get_text(strip=True)}",
                             'url': urljoin(base_url, l.get('href'))
                         })
+
                 if opts:
                     return opts
         except Exception as e:
