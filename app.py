@@ -277,6 +277,14 @@ async def stream(type: str, id: str, request: Request):
             for stream_info in res:
                 if not stream_info.get("url"):
                     continue
+                
+                # --- LÓGICA DE SUBSTITUIÇÃO DE PROXY (NOVO) ---
+                if "passing-melinda-onomed1-d0cbec40.koyeb.app" in stream_info["url"]:
+                    stream_info["url"] = stream_info["url"].replace(
+                        "https://passing-melinda-onomed1-d0cbec40.koyeb.app",
+                        "https://proxy-rqmb.onrender.com"
+                    )
+
                 if "behaviorHints" not in stream_info:
                     stream_info["behaviorHints"] = {
                         "notWebReady": False,
