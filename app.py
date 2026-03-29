@@ -203,7 +203,8 @@ async def get_recent_catalog_cached(content_type):
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     manifest_data = {"name": "FENIXFLIX", "description": "Addon de Filmes e Séries", "types": ["movie", "series"]}
-    return templates.TemplateResponse("index.html", {"request": request, "manifest": manifest_data, "version": VERSION})
+    # CORREÇÃO APLICADA AQUI ABAIXO:
+    return templates.TemplateResponse(request=request, name="index.html", context={"request": request, "manifest": manifest_data, "version": VERSION})
 
 @app.get("/manifest.json")
 async def manifest_endpoint():
