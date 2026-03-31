@@ -1,8 +1,6 @@
 import requests
 import logging
 import json
-import os
-import itertools
 
 logger = logging.getLogger(__name__)
 session = requests.Session()
@@ -13,32 +11,10 @@ TAPECONTENT_HEADERS = {
     "Origin": "http://87.106.82.84:14923"
 }
 
-# ==========================================
-# SISTEMA DE ROTAÇÃO DE HOSTS (ROUND-ROBIN)
-# ==========================================
-# Lê as variáveis do ambiente (pode ser do arquivo .env ou do painel da nuvem)
-HOST = os.getenv("HOST")
-HOST_1 = os.getenv("HOST_1")
-
-valid_hosts = []
-if HOST:
-    valid_hosts.append(HOST.rstrip('/'))
-if HOST_1:
-    valid_hosts.append(HOST_1.rstrip('/'))
-
-# Cria um ciclo infinito com os hosts disponíveis. 
-# Se tiver 2, ele alterna: HOST, HOST_1, HOST, HOST_1...
-# Se tiver 1, ele repete sempre o mesmo.
-host_cycle = itertools.cycle(valid_hosts) if valid_hosts else None
-
-def get_next_host():
-    if host_cycle:
-        return next(host_cycle)
-    return None
-# ==========================================
-
 def search_serve(imdb_id, content_type, season=None, episode=None):
     url = f"http://87.106.82.84:14923/{imdb_id}"
+
+   
 
     try:
         response = session.get(url, timeout=10)
@@ -56,6 +32,7 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
             season_str = str(season)
             episode_str = str(episode)
             streams_data = local_data.get('streams', {})
+
 
             if season_str not in streams_data:
                 print(f"[DEBUG - SERVE] ❌ Temporada '{season_str}' não encontrada no servidor")
@@ -116,15 +93,8 @@ def search_serve(imdb_id, content_type, season=None, episode=None):
 def montar_stream(url_stream, label):
     """
     Monta o objeto de stream no formato correto para o Stremio.
-    Faz a substituição do proxy alternando entre os hosts configurados.
+    Para URLs do tapecontent.net, passa os headers necessários via proxyHeaders.
     """
-    # Lógica de substituição da Vercel para os seus HOSTs customizados
-    if url_stream and "verel-fenixflix-proxy.vercel.app" in url_stream:
-        next_host = get_next_host()
-        if next_host:
-            # Substitui o domínio antigo pelo domínio da vez
-            url_stream = url_stream.replace("https://verel-fenixflix-proxy.vercel.app", next_host)
-
     stream = {
         "name": "FenixFlix",
         "description": label,
@@ -134,6 +104,7 @@ def montar_stream(url_stream, label):
             "bingeGroup": "fenixflix-serve"
         }
     }
+
 
     if url_stream and "tapecontent.net" in url_stream:
         stream["behaviorHints"]["proxyHeaders"] = {
