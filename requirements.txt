@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+aiohttp
+slowapi
+requests
+httpx
+jinja2
+python-dotenv
+beautifulsoup4
+pycryptodome
