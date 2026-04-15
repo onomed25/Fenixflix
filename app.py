@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -11,19 +11,19 @@ import os
 import time
 import json
 import uvicorn
+import random  
 from dotenv import load_dotenv
 
 import serve
-import archive
 import justwatch
 import on
 import go
 import fshd
-import fimoo  # <-- IMPORTAÇÃO DO FIMOO ADICIONADA AQUI
+import fimoo
 
 load_dotenv()
 
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 app = FastAPI()
 
 templates = Jinja2Templates(directory="templates")
@@ -42,11 +42,15 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 CACHE_DIR = "cache"
 CATALOG_CACHE_TIME = 6 * 60 * 60
-
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
+
+KOYEB = [
+    "https://passing-melinda-onomed1-d0cbec40.koyeb.app",
+    "https://husky-denny-fenixflixaddon-ec8e842b.koyeb.app"
+]
 
 async def converter_imdb_para_tmdb(imdb_id: str):
     url = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id"
@@ -101,8 +105,6 @@ async def obter_titulos_publicos(imdb_id, content_type):
     tmdb_type = "movie" if content_type == "movie" else "tv"
     url_tmdb_ptbr = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"
     url_tmdb_orig = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=en-US"
-    url_ptbr_addon = f"https://94c8cb9f702d-tmdb-addon.baby-beamup.club/pt-BR/meta/{content_type}/{imdb_id}.json"
-    url_cinemeta = f"https://v3-cinemeta.strem.io/meta/{content_type}/{imdb_id}.json"
 
     async with httpx.AsyncClient() as client:
         try:
@@ -124,87 +126,16 @@ async def obter_titulos_publicos(imdb_id, content_type):
             nome_ptbr = extrair_nome_tmdb(req_ptbr, tmdb_type)
             nome_orig = extrair_nome_tmdb(req_orig, tmdb_type)
 
-            if nome_ptbr:
-                titulos.append(nome_ptbr)
-            if nome_orig and nome_orig not in titulos:
-                titulos.append(nome_orig)
-
-        except Exception as e:
-            print(f"[DEBUG - APP] Falha no TMDB direto: {e}")
-
-        if not titulos:
-            try:
-                req_pt_addon, req_cinemeta = await asyncio.gather(
-                    client.get(url_ptbr_addon, timeout=5),
-                    client.get(url_cinemeta, timeout=5),
-                    return_exceptions=True
-                )
-                if not isinstance(req_pt_addon, Exception) and req_pt_addon.status_code == 200:
-                    nome_pt = req_pt_addon.json().get("meta", {}).get("name")
-                    if nome_pt and not nome_pt.startswith("Conteúdo "):
-                        titulos.append(nome_pt)
-                if not isinstance(req_cinemeta, Exception) and req_cinemeta.status_code == 200:
-                    nome_en = req_cinemeta.json().get("meta", {}).get("name")
-                    if nome_en and not nome_en.startswith("Conteúdo ") and nome_en not in titulos:
-                        titulos.append(nome_en)
-            except Exception as e:
-                print(f"[DEBUG - APP] Falha nos addons públicos: {e}")
-
+            if nome_ptbr: titulos.append(nome_ptbr)
+            if nome_orig and nome_orig not in titulos: titulos.append(nome_orig)
+        except Exception:
+            pass
     return titulos
-
-async def build_recent_catalog():
-    url = "http://87.106.82.84:14923/api/all"
-    movies = []
-    series = []
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, timeout=10)
-            if resp.status_code != 200:
-                return {"movie": [], "series": []}
-            all_data = resp.json()
-    except Exception:
-        return {"movie": [], "series": []}
-
-    for data in list(all_data.values()):
-        if len(movies) >= 25 and len(series) >= 25:
-            break
-        imdb_id = data.get("id")
-        if not imdb_id:
-            continue
-        content_type = data.get("type", "movie")
-        streams = data.get("streams", {})
-        if content_type == "series" and isinstance(streams, dict) and len(series) < 25:
-            meta = await fetch_cinemeta(imdb_id, "series")
-            if meta: series.append(meta)
-        elif (content_type == "movie" or isinstance(streams, list)) and len(movies) < 25:
-            meta = await fetch_cinemeta(imdb_id, "movie")
-            if meta: movies.append(meta)
-
-    return {"movie": movies, "series": series}
-
-async def get_recent_catalog_cached(content_type):
-    cache_file = os.path.join(CACHE_DIR, "server_recent_catalog.json")
-    if os.path.exists(cache_file):
-        if (time.time() - os.path.getmtime(cache_file)) < CATALOG_CACHE_TIME:
-            try:
-                with open(cache_file, "r", encoding="utf-8") as f:
-                    return json.load(f).get(content_type, [])
-            except Exception:
-                pass
-    catalogs = await build_recent_catalog()
-    try:
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(catalogs, f, ensure_ascii=False)
-    except Exception:
-        pass
-    return catalogs.get(content_type, [])
-
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     manifest_data = {"name": "FENIXFLIX", "description": "Addon de Filmes e Séries", "types": ["movie", "series"]}
-    # CORREÇÃO APLICADA AQUI ABAIXO:
-    return templates.TemplateResponse(request=request, name="index.html", context={"request": request, "manifest": manifest_data, "version": VERSION})
+    return templates.TemplateResponse(name="index.html", context={"request": request, "manifest": manifest_data, "version": VERSION})
 
 @app.get("/manifest.json")
 async def manifest_endpoint():
@@ -212,7 +143,6 @@ async def manifest_endpoint():
         "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
         "description": "Addon de Filmes e Séries",
         "logo": "https://i.imgur.com/9SKgxfU.png",
-        "background": "https://dl.strem.io/addon-background.jpg",
         "resources": ["stream", "catalog", "meta"],
         "types": ["movie", "series"],
         "catalogs": [
@@ -224,17 +154,6 @@ async def manifest_endpoint():
         "idPrefixes": ["tt", "tmdb"]
     })
 
-@app.get("/catalog/{type}/{id}.json")
-@app.get("/catalog/{type}/{id}/{extra}.json")
-async def catalog_endpoint(type: str, id: str, extra: str = None):
-    if extra and "skip" in extra:
-        return JSONResponse(content={"metas": []})
-    if id == "recentes_servidor":
-        return JSONResponse(content={"metas": await get_recent_catalog_cached(type)})
-    elif id == "popular":
-        return JSONResponse(content={"metas": await asyncio.to_thread(justwatch.fetch_catalog, id, type)})
-    return JSONResponse(content={"metas": []})
-
 @app.get("/stream/{type}/{id}.json")
 @limiter.limit("15/minute")
 async def stream(type: str, id: str, request: Request):
@@ -244,27 +163,24 @@ async def stream(type: str, id: str, request: Request):
         try:
             parts = id.split(':')
             season, episode = int(parts[1]), int(parts[2])
-        except Exception:
-            pass
+        except Exception: pass
 
     tmdb_id = await converter_imdb_para_tmdb(clean_id)
     titles_to_search = await obter_titulos_publicos(clean_id, type)
 
     def create_task(func, *args):
-        if asyncio.iscoroutinefunction(func):
-            return func(*args)
+        if asyncio.iscoroutinefunction(func): return func(*args)
         return asyncio.to_thread(func, *args)
 
     tasks = [
         create_task(serve.search_serve, clean_id, type, season, episode),
-        create_task(archive.search_serve, clean_id, type, season, episode)
     ]
     if tmdb_id:
-        tasks.append(create_task(on.search_serve, tmdb_id, type, season, episode))
-        tasks.append(create_task(fshd.search_serve, tmdb_id, type, season, episode))
-        # ---> FIMOO ADICIONADO AQUI <---
-        tasks.append(create_task(fimoo.search_serve, tmdb_id, type, season, episode))
-
+        tasks.extend([
+            create_task(on.search_serve, tmdb_id, type, season, episode),
+            create_task(fshd.search_serve, tmdb_id, type, season, episode),
+            create_task(fimoo.search_serve, tmdb_id, type, season, episode)
+        ])
     if titles_to_search:
         tasks.append(create_task(go.search_serve, titles_to_search, type, season, episode))
 
@@ -272,25 +188,23 @@ async def stream(type: str, id: str, request: Request):
     todos_streams = []
 
     for res in resultados:
-        if isinstance(res, Exception):
-            continue
         if isinstance(res, list):
             for stream_info in res:
-                if not stream_info.get("url"):
-                    continue
-                
-                # --- LÓGICA DE SUBSTITUIÇÃO DE PROXY (NOVO) ---
-                if "passing-melinda-onomed1-d0cbec40.koyeb.app" in stream_info["url"]:
-                    stream_info["url"] = stream_info["url"].replace(
-                        "https://passing-melinda-onomed1-d0cbec40.koyeb.app",
-                        "https://proxy-rqmb.onrender.com"
-                    )
+                url = stream_info.get("url", "")
+                if not url: continue
+
+                escolhido = random.choice(KOYEB)
+
+                if "87.106.82.84:14923" in url:
+                    path = url.split(":14923")[-1]
+                    stream_info["url"] = f"{escolhido}{path}"
+
+                elif "passing-melinda-onomed1-d0cbec40.koyeb.app" in url:
+                    stream_info["url"] = url.replace("https://passing-melinda-onomed1-d0cbec40.koyeb.app", escolhido)
 
                 if "behaviorHints" not in stream_info:
-                    stream_info["behaviorHints"] = {
-                        "notWebReady": False,
-                        "bingeGroup": "fenixflix"
-                    }
+                    stream_info["behaviorHints"] = {"notWebReady": False, "bingeGroup": "fenixflix"}
+
                 todos_streams.append(stream_info)
 
     if not todos_streams:
@@ -307,10 +221,8 @@ async def meta_endpoint(type: str, id: str):
         ]:
             try:
                 resp = await client.get(url, timeout=5)
-                if resp.status_code == 200:
-                    return JSONResponse(content=resp.json())
-            except Exception:
-                pass
+                if resp.status_code == 200: return JSONResponse(content=resp.json())
+            except Exception: pass
     return JSONResponse(content={"meta": {"id": id, "type": type, "name": f"Conteúdo {id}"}})
 
 if __name__ == "__main__":

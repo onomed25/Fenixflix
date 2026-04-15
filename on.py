@@ -100,18 +100,7 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 
                     print("[Azullog Debug] Tentando extrair um iframe genérico do embed...")
                     any_iframe = soup2.select_one("iframe")
-                    if any_iframe and any_iframe.get("src"):
-                        src = any_iframe.get("src")
-                        final_embed = "https:" + src if src.startswith("//") else src
-                        print(f"[Azullog Debug] SUCESSO! Iframe genérico encontrado: {final_embed}")
-                        streams.append({
-                            "name": "FenixFlix",
-                            "description": f"Embed - {label}\nAzullog",
-                            "url": final_embed,
-                            "behaviorHints": {"notWebReady": False}
-                        })
-                    else:
-                        print("[Azullog Debug] Nenhum iframe de vídeo encontrado neste player.")
+                    print("[Azullog Debug] Nenhum iframe de vídeo encontrado neste player.")
 
                 except Exception as inner_e:
                     continue
