@@ -3,11 +3,8 @@ from bs4 import BeautifulSoup
 import re
 import asyncio
 
-# ==========================================
-# SISTEMA DE ROTAÇÃO DE PROXY
-# ==========================================
 REQUEST_COUNT = 0
-PROXY_URL = "http://217.160.125.126:13540" # O seu proxy
+PROXY_URL = "http://217.160.125.126:13540"
 REQUESTS_BEFORE_SWITCH = 10 # Alterna entre local/proxy a cada 10 execuções
 
 def get_current_proxy():

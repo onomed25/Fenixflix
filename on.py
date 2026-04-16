@@ -9,6 +9,7 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 
     print(f"\n[Azullog Debug] Iniciando busca para TMDB ID: {tmdb_id} | Tipo: {content_type} | S{season}E{episode}")
 
+    # Este else foi mantido pois define a URL corretamente
     if content_type == "movie":
         url = f"https://azullog.site/filme/{tmdb_id}"
     else:
@@ -38,15 +39,13 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                     src = iframe.get("src")
                     final_url = "https:" + src if src.startswith("//") else src
                     streams.append({"name": "FenixFlix", "description": "Player Direto\nAzullog", "url": final_url, "behaviorHints": {"notWebReady": False}})
-                else:
-                    print("[Azullog Debug] Nenhum iframe de fallback encontrado.")
+                
                 return streams
 
             for item in select_items:
                 data_embed = item.get("data-embed")
                 name_el = item.select_one("div.player_select_name")
                 label = name_el.text.strip() if name_el else "Player"
-
 
                 if not data_embed:
                     continue
@@ -70,7 +69,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 
                         if api_url_match:
                             api_url = api_url_match.group(1)
-
                             mediafire_enc_match = re.search(r"[?&]url=([^&]+)", api_url)
 
                             if mediafire_enc_match:
@@ -89,14 +87,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                                         "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-azullog"}
                                     })
                                     continue
-                                else:
-                                    print("[Azullog Debug] Botão 'downloadButton' não encontrado na página do MediaFire.")
-                            else:
-                                print("[Azullog Debug] Parâmetro 'url' não encontrado na apiUrl.")
-                        else:
-                            print("[Azullog Debug] Variável 'apiUrl' não encontrada no código-fonte do player_2.php.")
-                    else:
-                        print("[Azullog Debug] iframe 'player_2.php' não encontrado.")
 
                     print("[Azullog Debug] Tentando extrair um iframe genérico do embed...")
                     any_iframe = soup2.select_one("iframe")

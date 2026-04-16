@@ -11,15 +11,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------
-# SESSÃO GLOBAL (Melhoria de Performance)
-# ---------------------------------------------------------
+
 session = requests.Session()
 session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
 
-# ---------------------------------------------------------
-# FUNÇÕES DE CRIPTOGRAFIA (AES)
-# ---------------------------------------------------------
 def evp_kdf(password, salt, key_size, iv_size):
     d = d_i = b''
     while len(d) < key_size + iv_size:
@@ -54,9 +49,7 @@ def decodificar_ck(ck_raw):
     except:
         return ck_raw
 
-# ---------------------------------------------------------
-# RESOLVER MASTER.TXT
-# ---------------------------------------------------------
+
 def resolver_master_txt(master_url, referer):
     headers = {'Referer': referer}
     try:
@@ -81,9 +74,7 @@ def resolver_master_txt(master_url, referer):
         logger.debug(f"Erro ao resolver master.txt: {e}")
     return None
 
-# ---------------------------------------------------------
-# EXTRATOR EMBEDPLAYER1
-# ---------------------------------------------------------
+
 def extrair_embedplayer1(url_video):
     video_id = url_video.split('/')[-1].split('?')[0]
     api_url = 'https://embedplayer1.xyz/player/index.php?data=' + video_id + '&do=getVideo'
@@ -151,9 +142,7 @@ def gerar_slugs(title):
 
     return slugs
 
-# ---------------------------------------------------------
-# BUSCA PRINCIPAL DE OPÇÕES
-# ---------------------------------------------------------
+
 def search_gofilmes(titles, content_type, season=None, episode=None):
     base_url = 'https://gofilmeshd.top'
     path     = 'series' if content_type == 'series' else ''
@@ -224,9 +213,7 @@ def search_gofilmes(titles, content_type, season=None, episode=None):
 
     return []
 
-# ---------------------------------------------------------
-# RESOLVER STREAM FINAL
-# ---------------------------------------------------------
+
 def resolve_stream(player_url):
     try:
         r    = session.get(player_url, timeout=10)
@@ -258,13 +245,11 @@ def resolve_stream(player_url):
             if src.startswith('//'):
                 src = 'https:' + src
 
-            # EmbedPlayer1
             if 'embedplayer1.xyz' in src:
                 link = extrair_embedplayer1(src)
                 if link:
                     return link, {'Referer': 'https://embedplayer1.xyz/', 'Origin': 'https://embedplayer1.xyz'}
 
-            # Player 112234152
             elif '112234152.xyz' in src:
                 vid        = src.split('?data=')[-1].split('&')[0]
                 master_url = f'https://112234152.xyz/hls/{vid}/master.txt'
@@ -307,9 +292,7 @@ def resolve_stream(player_url):
 
     return '', {}
 
-# ---------------------------------------------------------
-# ENTRY POINT DO ADDON
-# ---------------------------------------------------------
+
 def search_serve(titles, content_type, season=None, episode=None):
     options = search_gofilmes(titles, content_type, season, episode)
     results = []

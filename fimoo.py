@@ -1,6 +1,7 @@
 import httpx
 import re
 import json
+import asyncio
 from bs4 import BeautifulSoup
 
 HEADERS = {
@@ -53,6 +54,7 @@ async def search_serve(tmdb_id: str, content_type: str, season: int = None, epis
 
             if match:
                 catalogo = json.loads(match.group(1))
+                links_pagina = []
 
                 for audio_key, audio_data in catalogo.items():
                     idioma = audio_data.get('label', audio_key.upper())
@@ -74,10 +76,19 @@ async def search_serve(tmdb_id: str, content_type: str, season: int = None, epis
                     elif content_type == "movie":
                         link_pagina = audio_data.get('url')
 
-                    # --- SE ACHOU O LINK DO EPISÓDIO/FILME, VAI BUSCAR O MP4 FINAL ---
+                    # --- SE ACHOU O LINK, ADICIONA NA LISTA PARA BUSCAR DEPOIS ---
                     if link_pagina:
-                        link_mp4 = await extrair_link_mp4(link_pagina)
-                        if link_mp4 and link_mp4.startswith("http"):
+                        links_pagina.append((idioma, link_pagina))
+
+                # --- EXTRAÇÃO EM PARALELO DE TODOS OS ÁUDIOS ENCONTRADOS ---
+                if links_pagina:
+                    resultados_mp4 = await asyncio.gather(
+                        *[extrair_link_mp4(lp) for _, lp in links_pagina],
+                        return_exceptions=True
+                    )
+
+                    for (idioma, _), link_mp4 in zip(links_pagina, resultados_mp4):
+                        if isinstance(link_mp4, str) and link_mp4.startswith("http"):
                             streams.append({
                                 "name": "FenixFlix",
                                 "title": f"{idioma}\nFimoo",
