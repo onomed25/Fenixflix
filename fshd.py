@@ -3,10 +3,11 @@ from bs4 import BeautifulSoup
 import re
 import asyncio
 
-def js_unpack(source):    source = source.strip()
+def js_unpack(source):
+    """Função utilitária para descompactar JavaScript ofuscado (P.A.C.K.E.R)."""
+    source = source.strip()
     args_pattern = r"\}\s*\(\s*['\"](.+?)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['\"](.+?)['\"]\s*\.split\s*\(\s*['\"]\|['\"]\s*\)"
-    match = re.search(args_pattern, source, re.DOTALL)
-
+ 
     if not match:
         full_pattern = r"eval\s*\(\s*function\s*\(\s*p\s*,\s*a\s*,\s*c\s*,\s*k\s*,\s*e\s*,\s*d\s*\).+?\}\s*\(\s*['\"](.+?)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['\"](.+?)['\"]\s*\.split\s*\(\s*['\"]\|['\"]\s*\)"
         match = re.search(full_pattern, source, re.DOTALL)
