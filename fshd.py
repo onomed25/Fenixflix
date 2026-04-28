@@ -3,27 +3,7 @@ from bs4 import BeautifulSoup
 import re
 import asyncio
 
-REQUEST_COUNT = 0
-PROXY_URL = "http://217.160.125.126:13540"
-REQUESTS_BEFORE_SWITCH = 10 # Alterna entre local/proxy a cada 10 execuções
-
-def get_current_proxy():
-    global REQUEST_COUNT
-    REQUEST_COUNT += 1
-
-    # Se o resultado for 1, usa proxy. Se for 0, usa IP local.
-    if ((REQUEST_COUNT - 1) // REQUESTS_BEFORE_SWITCH) % 2 == 1:
-        print(f"[Proxy Sys] Execução {REQUEST_COUNT}: A usar Proxy ({PROXY_URL})")
-        return PROXY_URL
-    else:
-        print(f"[Proxy Sys] Execução {REQUEST_COUNT}: A usar IP Local")
-        return None
-# ==========================================
-
-
-def js_unpack(source):
-    """Função utilitária para descompactar JavaScript ofuscado (P.A.C.K.E.R)."""
-    source = source.strip()
+def js_unpack(source):    source = source.strip()
     args_pattern = r"\}\s*\(\s*['\"](.+?)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['\"](.+?)['\"]\s*\.split\s*\(\s*['\"]\|['\"]\s*\)"
     match = re.search(args_pattern, source, re.DOTALL)
 
@@ -131,17 +111,13 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
         "Referer": f"{base_url}/"
     }
 
-    # Prepara as opções do cliente HTTP (httpx)
-    current_proxy = get_current_proxy()
+    # Prepara as opções do cliente HTTP (httpx) sem proxy
     client_kwargs = {
         "timeout": 15.0,
         "follow_redirects": True
     }
 
-    if current_proxy:
-        client_kwargs["proxy"] = current_proxy
-
-    # Inicia o cliente com (ou sem) o proxy
+    # Inicia o cliente com o IP local
     async with httpx.AsyncClient(**client_kwargs) as client:
         try:
             res = await client.get(url, headers=headers)
