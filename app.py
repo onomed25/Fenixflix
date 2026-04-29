@@ -48,7 +48,6 @@ if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
 
 async def converter_imdb_para_tmdb(imdb_id: str):
-    # Se já for um ID do TMDB nativo enviado pelo Stremio, não precisamos de converter
     if imdb_id.startswith("tmdb:"):
         return imdb_id.split(":")[1]
         
@@ -106,7 +105,6 @@ async def obter_titulos_publicos(imdb_id, content_type):
     tmdb_id_num = imdb_id.split(":")[1] if is_tmdb else None
 
     async with httpx.AsyncClient() as client:
-        # Busca nativa na base de dados (Lida melhor com o prefixo tmdb:)
         try:
             if is_tmdb:
                 req_ptbr, req_orig = await asyncio.gather(
@@ -150,7 +148,6 @@ async def obter_titulos_publicos(imdb_id, content_type):
         except Exception as e:
             print(f"[DEBUG - APP] Falha no TMDB direto: {e}")
 
-        # Busca Addon Cinemeta
         if not titulos:
             try:
                 url_ptbr_addon = f"https://94c8cb9f702d-tmdb-addon.baby-beamup.club/pt-BR/meta/{content_type}/{imdb_id}.json"
@@ -260,7 +257,6 @@ async def catalog_endpoint(type: str, id: str, extra: str = None):
 async def stream(type: str, id: str, request: Request):
     season, episode = None, None
     
-    # Extração de ID corrigida para lidar bem com Stremio 'tmdb:'
     if id.startswith("tmdb:"):
         parts = id.split(':')
         clean_id = f"tmdb:{parts[1]}"
@@ -274,11 +270,27 @@ async def stream(type: str, id: str, request: Request):
 
     todos_streams = []
 
-    # 1. TENTA PRIMEIRO NO SERVIDOR LOCAL
+    task_serve = asyncio.create_task(serve.search_serve(clean_id, type, season, episode))
+    task_tmdb = asyncio.create_task(converter_imdb_para_tmdb(clean_id))
+    task_titles = asyncio.create_task(obter_titulos_publicos(clean_id, type))
+
+    tmdb_id, titles_to_search = await asyncio.gather(
+        task_tmdb, task_titles, return_exceptions=True
+    )
+
+    if isinstance(tmdb_id, Exception): tmdb_id = None
+    if isinstance(titles_to_search, Exception): titles_to_search = []
+
+    tasks_externas = []
+
+    if titles_to_search:
+        tasks_externas.append(asyncio.create_task(go.search_serve(titles_to_search, type, season, episode)))
+        tasks_externas.append(asyncio.create_task(streamflix.search_serve(titles_to_search, type, season, episode)))
+
     try:
-        serve_streams = await serve.search_serve(clean_id, type, season, episode)
-        if serve_streams:
-            for stream_info in serve_streams:
+        serve_res = await task_serve
+        if serve_res:
+            for stream_info in serve_res:
                 if stream_info.get("url"):
                     if "behaviorHints" not in stream_info:
                         stream_info["behaviorHints"] = {"notWebReady": False, "bingeGroup": "fenixflix-serve"}
@@ -286,34 +298,14 @@ async def stream(type: str, id: str, request: Request):
     except Exception as e:
         print(f"[DEBUG - APP] Erro ao pesquisar no serve: {e}")
 
-    # FLAG que define o comportamento do fshd e fimoo
     achou_no_server = len(todos_streams) > 0
 
-    tmdb_id, titles_to_search = await asyncio.gather(
-        converter_imdb_para_tmdb(clean_id),
-        obter_titulos_publicos(clean_id, type)
-    )
-
-    def create_task(func, *args):
-        if asyncio.iscoroutinefunction(func):
-            return func(*args)
-        return asyncio.to_thread(func, *args)
-
-    tasks = []
-    
-    # 2. A TUA REGRA APLICADA: SÓ busca no fshd e fimoo se o servidor NÃO achar
     if tmdb_id and not achou_no_server:
-        tasks.append(create_task(fshd.search_serve, tmdb_id, type, season, episode))
-        tasks.append(create_task(fimoo.search_serve, tmdb_id, type, season, episode))
+        tasks_externas.append(asyncio.create_task(fshd.search_serve(tmdb_id, type, season, episode)))
+        tasks_externas.append(asyncio.create_task(fimoo.search_serve(tmdb_id, type, season, episode)))
 
-    # 3. Mas procura SEMPRE (mesmo se achou no server) no Go e StreamFlix
-    if titles_to_search:
-        tasks.append(create_task(go.search_serve, titles_to_search, type, season, episode))
-        tasks.append(create_task(streamflix.search_serve, titles_to_search, type, season, episode))
-
-    if tasks:
-        resultados = await asyncio.gather(*tasks, return_exceptions=True)
-
+    if tasks_externas:
+        resultados = await asyncio.gather(*tasks_externas, return_exceptions=True)
         for res in resultados:
             if isinstance(res, Exception):
                 continue
@@ -321,13 +313,11 @@ async def stream(type: str, id: str, request: Request):
                 for stream_info in res:
                     if not stream_info.get("url"):
                         continue
-
                     if "behaviorHints" not in stream_info:
                         stream_info["behaviorHints"] = {
                             "notWebReady": False,
                             "bingeGroup": "fenixflix"
                         }
-                        
                     todos_streams.append(stream_info)
 
     if not todos_streams:

@@ -17,7 +17,7 @@ async def extrair_link_mp4(url_episodio):
             html = response.text
 
             # --- PLANO A: Procurar o link no botão de Download ---
-            soup = BeautifulSoup(html, 'html.parser')
+            soup = BeautifulSoup(html, 'lxml')
             botao_download = soup.select_one('#down-list a')
             if botao_download and botao_download.get('href'):
                 return botao_download.get('href')
@@ -35,7 +35,6 @@ async def extrair_link_mp4(url_episodio):
 async def search_serve(tmdb_id: str, content_type: str, season: int = None, episode: int = None):
     """Função principal chamada pelo app.py do FenixFlix"""
 
-    # Aplicando a sua dica: manda direto para a temporada se for série
     url_player = f"https://player.fimoo.site/embed/{tmdb_id}"
     if content_type == "series" and season:
         url_player += f"?season={season}"
@@ -48,7 +47,6 @@ async def search_serve(tmdb_id: str, content_type: str, season: int = None, epis
             if response.status_code != 200:
                 return streams
 
-            # Extrai o JSON de dentro do JavaScript da página
             padrao_regex = r'var TRACKS\s*=\s*(\{.*?\});'
             match = re.search(padrao_regex, response.text)
 
@@ -60,27 +58,22 @@ async def search_serve(tmdb_id: str, content_type: str, season: int = None, epis
                     idioma = audio_data.get('label', audio_key.upper())
                     link_pagina = None
 
-                    # --- LÓGICA PARA SÉRIES ---
                     if content_type == "series" and season and episode:
                         temporadas = audio_data.get("seasons", {})
                         temp_data = temporadas.get(str(season), {})
                         episodios = temp_data.get("episodes", [])
 
                         for ep in episodios:
-                            # Procura o episódio exato
                             if str(ep.get('ep')) == str(episode):
                                 link_pagina = ep.get('url')
                                 break
 
-                    # --- LÓGICA PARA FILMES ---
                     elif content_type == "movie":
                         link_pagina = audio_data.get('url')
 
-                    # --- SE ACHOU O LINK, ADICIONA NA LISTA PARA BUSCAR DEPOIS ---
                     if link_pagina:
                         links_pagina.append((idioma, link_pagina))
 
-                # --- EXTRAÇÃO EM PARALELO DE TODOS OS ÁUDIOS ENCONTRADOS ---
                 if links_pagina:
                     resultados_mp4 = await asyncio.gather(
                         *[extrair_link_mp4(lp) for _, lp in links_pagina],

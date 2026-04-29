@@ -8,6 +8,7 @@ def js_unpack(source):
     source = source.strip()
     args_pattern = r"\}\s*\(\s*['\"](.+?)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['\"](.+?)['\"]\s*\.split\s*\(\s*['\"]\|['\"]\s*\)"
  
+    match = None
     if not match:
         full_pattern = r"eval\s*\(\s*function\s*\(\s*p\s*,\s*a\s*,\s*c\s*,\s*k\s*,\s*e\s*,\s*d\s*\).+?\}\s*\(\s*['\"](.+?)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['\"](.+?)['\"]\s*\.split\s*\(\s*['\"]\|['\"]\s*\)"
         match = re.search(full_pattern, source, re.DOTALL)
@@ -95,7 +96,6 @@ async def _extract_internal_player(client, player_url, referer):
 async def search_serve(tmdb_id: str, content_type: str, season=None, episode=None):
     streams = []
 
-    # TRAVA ABSOLUTA: Se não for exatamente "series", ele morre aqui e não faz nada.
     if content_type.strip().lower() != "series":
         print(f"[FSHD Debug] Ignorando busca para TMDB {tmdb_id}. Motivo: O tipo é '{content_type}', e este script agora é exclusivo para séries.")
         return streams
@@ -105,20 +105,18 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
     print(f"\n[FSHD Debug] A procurar TMDB ID: {tmdb_id} | Tipo: {content_type} | S{season}E{episode}")
 
     url = f"{base_url}/serie/{tmdb_id}/{season}/{episode}"
-    c_type = "2" # Fixo para séries
+    c_type = "2" 
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
         "Referer": f"{base_url}/"
     }
 
-    # Prepara as opções do cliente HTTP (httpx) sem proxy
     client_kwargs = {
         "timeout": 15.0,
         "follow_redirects": True
     }
 
-    # Inicia o cliente com o IP local
     async with httpx.AsyncClient(**client_kwargs) as client:
         try:
             res = await client.get(url, headers=headers)
@@ -127,11 +125,10 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                 return streams
 
             html = res.text
-            soup = BeautifulSoup(html, 'html.parser')
+            soup = BeautifulSoup(html, 'lxml')
 
             content_info = None
 
-            # Lógica para extrair o ID do episódio da série
             active_ep = soup.select_one(".episodeOption.active")
             if active_ep and active_ep.get("data-contentid"):
                 content_info = active_ep.get("data-contentid")
@@ -148,7 +145,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 
             server_ids = []
 
-            # Busca as opções de servidores via API para a série
             pl = {"content_id": int(content_info), "content_type": c_type}
             h_ajax = headers.copy()
             h_ajax.update({"X-Requested-With": "XMLHttpRequest", "Accept": "application/json", "Referer": url})

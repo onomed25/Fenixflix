@@ -15,9 +15,6 @@ HEADERS = {
     'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
 }
 
-# ---------------------------------------------------------
-# FUNÇÕES DE CRIPTOGRAFIA
-# ---------------------------------------------------------
 def evp_kdf(password, salt, key_size, iv_size):
     d = d_i = b''
     while len(d) < key_size + iv_size:
@@ -52,9 +49,6 @@ def decodificar_ck(ck_raw):
     except:
         return ck_raw
 
-# ---------------------------------------------------------
-# FUNÇÕES ASSÍNCRONAS DE RESOLUÇÃO DE STREAM
-# ---------------------------------------------------------
 async def resolver_master_txt(client, master_url, referer):
     headers = {'Referer': referer}
     try:
@@ -142,7 +136,7 @@ async def resolve_stream_async(client, player_url):
             print(f"[Go Debug] Mediafire encontrado na página principal.")
             return mf_match.group(1), {'Referer': player_url}
 
-        soup   = BeautifulSoup(html, 'html.parser')
+        soup   = BeautifulSoup(html, 'lxml')
         iframe = soup.find('iframe')
         src    = iframe.get('src') if iframe else None
 
@@ -190,9 +184,6 @@ async def resolve_stream_async(client, player_url):
 
     return '', {}
 
-# ---------------------------------------------------------
-# GERAR VARIAÇÕES DO SLUG E EXTRATOR
-# ---------------------------------------------------------
 def gerar_slugs(title):
     limpo = re.sub(r'[^\w\s-]', '', title)
     limpo = re.sub(r'\s+', ' ', limpo).strip()
@@ -214,7 +205,7 @@ def gerar_slugs(title):
     return slugs
 
 def extrair_opcoes(html, content_type, season, episode):
-    soup = BeautifulSoup(html, 'html.parser')
+    soup = BeautifulSoup(html, 'lxml')
     opts = []
     base_url = 'https://gofilmeshd.top'
 
@@ -276,17 +267,14 @@ async def search_gofilmes(client, titles, content_type, season=None, episode=Non
 
     print(f"[Go Debug] Total de variações de nomes a testar em paralelo: {len(slugs_unicos)}")
 
-    # Limita para não bloquear a API, testa até 3 ao mesmo tempo
-    sem = asyncio.Semaphore(3)
+    sem = asyncio.Semaphore(6)
 
     async def tentar_com_semaforo(slug):
         async with sem:
             return await tentar_slug(client, slug, content_type, season, episode)
 
-    # Cria todas as tarefas em paralelo
     tarefas = [asyncio.create_task(tentar_com_semaforo(slug)) for slug in slugs_unicos]
 
-    # Assim que qualquer uma delas retornar um resultado válido, ele cancela as outras!
     for resultado_futuro in asyncio.as_completed(tarefas):
         try:
             opcoes = await resultado_futuro
@@ -301,14 +289,10 @@ async def search_gofilmes(client, titles, content_type, season=None, episode=Non
             
     return []
 
-# ---------------------------------------------------------
-# FUNÇÃO PRINCIPAL
-# ---------------------------------------------------------
 async def search_serve(titles, content_type, season=None, episode=None):
     results = []
     print(f"\n[Go Debug] Iniciando busca para títulos: {titles} | Tipo: {content_type}")
 
-    # Criação do cliente de forma segura amarrado à requisição atual
     async with httpx.AsyncClient(
         headers=HEADERS,
         timeout=10.0,
@@ -323,7 +307,6 @@ async def search_serve(titles, content_type, season=None, episode=None):
 
         print(f"[Go Debug] Encontradas {len(options)} opções de players. Resolvendo...")
 
-        # Resolve até 2 streams em paralelo
         tasks = [resolve_stream_async(client, opt['url']) for opt in options[:2]]
         resolved_streams = await asyncio.gather(*tasks, return_exceptions=True)
 
