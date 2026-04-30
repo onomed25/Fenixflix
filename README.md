@@ -1,6 +1,14 @@
 # Fenixflix
-Fenixflix is ​​an addon for stremio
+Fenixflix é um add‑on para o Stremio, focado em encontrar conteúdos dublados.
 
-fenixflix-2cdc.onrender.com
+**Site:** [fenixflix-2cdc.onrender.com](https://fenixflix-2cdc.onrender.com)
 
-https://stremio-addons.net/addons/fenixflix
+**Loja Addon:** [Stremio Addons](https://stremio-addons.net/addons/fenixflix)
+
+## Creditos
+
+### [liet-nuvio](https://github.com/lawlietbr/liet-nuvio)
+Usa os mesmos sites que o liet-nuvio e o código foi baseado neles
+
+### [Skyflix](https://github.com/zoreu/skyflix)
+O código foi baseado nele

@@ -6,20 +6,17 @@ import asyncio
 def js_unpack(source):
     """Função utilitária para descompactar JavaScript ofuscado (P.A.C.K.E.R)."""
     source = source.strip()
-    args_pattern = r"\}\s*\(\s*['\"](.+?)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['\"](.+?)['\"]\s*\.split\s*\(\s*['\"]\|['\"]\s*\)"
- 
-    match = None
-    if not match:
-        full_pattern = r"eval\s*\(\s*function\s*\(\s*p\s*,\s*a\s*,\s*c\s*,\s*k\s*,\s*e\s*,\s*d\s*\).+?\}\s*\(\s*['\"](.+?)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['\"](.+?)['\"]\s*\.split\s*\(\s*['\"]\|['\"]\s*\)"
-        match = re.search(full_pattern, source, re.DOTALL)
+
+    full_pattern = r"eval\s*\(\s*function\s*\(\s*p\s*,\s*a\s*,\s*c\s*,\s*k\s*,\s*e\s*,\s*d\s*\).+?\}\s*\(\s*['\"](.+?)['\"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*['\"](.+?)['\"]\s*\.split\s*\(\s*['\"]\|['\"]\s*\)"
+    match = re.search(full_pattern, source, re.DOTALL)
 
     if not match:
         return None
 
     try:
-        payload = match.group(1)
-        radix = int(match.group(2))
-        count = int(match.group(3))
+        payload  = match.group(1)
+        radix    = int(match.group(2))
+        count    = int(match.group(3))
         keywords = match.group(4).split('|')
 
         def base_encode(n):
@@ -93,7 +90,10 @@ async def _extract_internal_player(client, player_url, referer):
     return None
 
 
-async def search_serve(tmdb_id: str, content_type: str, season=None, episode=None):
+async def search_serve(tmdb_id: str, content_type: str, season=None, episode=None, client: httpx.AsyncClient = None):
+    """
+    Aceita um cliente httpx partilhado (pool de conexões) ou cria o seu próprio.
+    """
     streams = []
 
     if content_type.strip().lower() != "series":
@@ -101,25 +101,19 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
         return streams
 
     base_url = "https://fshd.link"
-
     print(f"\n[FSHD Debug] A procurar TMDB ID: {tmdb_id} | Tipo: {content_type} | S{season}E{episode}")
 
     url = f"{base_url}/serie/{tmdb_id}/{season}/{episode}"
-    c_type = "2" 
+    c_type = "2"
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
         "Referer": f"{base_url}/"
     }
 
-    client_kwargs = {
-        "timeout": 15.0,
-        "follow_redirects": True
-    }
-
-    async with httpx.AsyncClient(**client_kwargs) as client:
+    async def _run(c):
         try:
-            res = await client.get(url, headers=headers)
+            res = await c.get(url, headers=headers)
             if res.status_code != 200:
                 print(f"[FSHD Debug] Falha ao aceder à página base. Status: {res.status_code}")
                 return streams
@@ -128,7 +122,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
             soup = BeautifulSoup(html, 'lxml')
 
             content_info = None
-
             active_ep = soup.select_one(".episodeOption.active")
             if active_ep and active_ep.get("data-contentid"):
                 content_info = active_ep.get("data-contentid")
@@ -144,13 +137,12 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
             print(f"[FSHD Debug] CONTENT_INFO resolvido: {content_info}")
 
             server_ids = []
-
             pl = {"content_id": int(content_info), "content_type": c_type}
             h_ajax = headers.copy()
             h_ajax.update({"X-Requested-With": "XMLHttpRequest", "Accept": "application/json", "Referer": url})
 
             try:
-                res_opt = await client.post(f"{base_url}/api/options", data=pl, headers=h_ajax)
+                res_opt = await c.post(f"{base_url}/api/options", data=pl, headers=h_ajax)
                 server_ids = re.findall(r'["\']ID["\']\s*:\s*(\d+)', res_opt.text)
             except Exception as e:
                 print(f"[FSHD Debug] API Opt Error: {e}")
@@ -165,11 +157,10 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                         "content_type": c_type,
                         "video_id": int(vid_id)
                     }
-                    h_ajax = headers.copy()
-                    h_ajax.update({"X-Requested-With": "XMLHttpRequest", "Referer": url})
+                    h_ajax2 = headers.copy()
+                    h_ajax2.update({"X-Requested-With": "XMLHttpRequest", "Referer": url})
 
-                    res_player = await client.post(f"{base_url}/api/players", data=pl_data, headers=h_ajax)
-
+                    res_player = await c.post(f"{base_url}/api/players", data=pl_data, headers=h_ajax2)
                     m_url = re.search(r'["\']video_url["\']\s*:\s*["\'](.*?)["\']', res_player.text)
                     if not m_url:
                         continue
@@ -177,14 +168,13 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
                     player_url = m_url.group(1).replace("\\/", "/")
                     print(f"[FSHD Debug] Player URL (ID {vid_id}): {player_url}")
 
-                    final_url = await _resolve_redirect(client, player_url, url)
+                    final_url = await _resolve_redirect(c, player_url, url)
                     if not final_url:
                         continue
 
                     stream_url = final_url
-
                     if "112234152.xyz" in final_url or "/player/" in final_url:
-                        final_m3u8 = await _extract_internal_player(client, final_url, player_url)
+                        final_m3u8 = await _extract_internal_player(c, final_url, player_url)
                         if final_m3u8:
                             stream_url = final_m3u8
                             print(f"[FSHD Debug] Link M3U8 extraído: {stream_url}")
@@ -205,4 +195,10 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
         except Exception as e:
             print(f"[FSHD Debug] Erro global: {e}")
 
-    return streams
+        return streams
+
+    if client is not None:
+        return await _run(client)
+    else:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as c:
+            return await _run(c)
