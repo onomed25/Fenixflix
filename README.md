@@ -1,7 +1,7 @@
 # Fenixflix
 Fenixflix é um add‑on para o Stremio, focado em encontrar conteúdos dublados.
 
-**Site:** [fenixflix-2cdc.onrender.com](https://fenixflix-2cdc.onrender.com)
+**Site:** [fenixflix](https://fenixflix-ur9u.onrender.com/)
 
 **Loja Addon:** [Stremio Addons](https://stremio-addons.net/addons/fenixflix)
 
