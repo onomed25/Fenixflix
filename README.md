@@ -8,7 +8,7 @@ Fenixflix é um add‑on para o Stremio, focado em encontrar conteúdos dublados
 ## Creditos
 
 ### [liet-nuvio](https://github.com/lawlietbr/liet-nuvio)
-Usa os mesmos sites que o liet-nuvio e o código foi baseado neles
+O código do Doramogo e do MyWallpaper foi baseado no código do Liet-Nuvio
 
 ### [Skyflix](https://github.com/zoreu/skyflix)
 O código foi baseado nele
