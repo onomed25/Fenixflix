@@ -1,4 +1,3 @@
-# doramogo.py
 import re
 import unicodedata
 import time
@@ -128,7 +127,7 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
     slug_variations = generate_slug_variations(title, target_season, ano)
     streams = []
 
-    for slug in slug_variations:
+    async def test_and_return(slug):
         first_letter = slug[0].upper() if slug else 'T'
 
         if media_type == 'movie':
@@ -137,9 +136,8 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
             stream_url = f"{CDN_PROXY}/{first_letter}/{slug}/{season_padded}-temporada/{ep_padded}/stream.m3u8?nocache={timestamp}"
         
         if await test_url(client, stream_url):
-            print(f"[DEBUG - Doramogo] Fluxo final encontrado e adicionado com sucesso!")
-            
-            streams.append({
+            print(f"[DEBUG - Doramogo] Fluxo final encontrado e adicionado com sucesso! URL: {stream_url}")
+            return {
                 "url": stream_url,
                 "name": 'FenixFlix\n1080p',
                 "title": title if media_type == 'movie' else f"Dublado\ndoramogo",
@@ -155,20 +153,32 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
                         }
                     }
                 }
-            })
-            break 
+            }
+        return None
+
+    tasks = [asyncio.create_task(test_and_return(slug)) for slug in slug_variations]
+
+    for task_result in asyncio.as_completed(tasks):
+        try:
+            resultado = await task_result
+            if resultado:  # Achou um link que funciona!
+                streams.append(resultado)
+                
+                for t in tasks:
+                    if not t.done():
+                        t.cancel()
+                
+                break 
+        except Exception as e:
+            print(f"[DEBUG - Doramogo] Erro ao aguardar tarefa: {e}")
 
     if not streams:
         print("[DEBUG - Doramogo] Nenhum fluxo encontrado para as variações testadas.")
     
     return streams
 
-# --- BLOCO DE TESTES ---
 if __name__ == "__main__":
     async def testar_doramogo():
-        print("=== Teste Isolado: DORAMOGO ===")
         async with httpx.AsyncClient(verify=False) as client:
-            resultados = await search_serve("93405", "series", 1, 1, client)
-            print("\nResultados Encontrados:", resultados)
 
     asyncio.run(testar_doramogo())

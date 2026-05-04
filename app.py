@@ -1,5 +1,6 @@
+# app.py (OTIMIZADO)
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -16,10 +17,10 @@ from dotenv import load_dotenv
 
 import serve
 import justwatch
-import fshd
 import streamflix
 import doramogo 
 import mywallpaper 
+import on
 
 load_dotenv()
 
@@ -64,22 +65,60 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-async def converter_imdb_para_tmdb(imdb_id: str):
+async def obter_dados_base_tmdb(imdb_id: str, content_type: str):
+    """
+    Faz uma única busca no TMDB e retorna tanto o tmdb_id quanto a lista de títulos.
+    """
+    tmdb_id_final = None
+    titulos = []
+    tmdb_type = "movie" if content_type == "movie" else "tv"
+    
     if imdb_id.startswith("tmdb:"):
-        return imdb_id.split(":")[1]
+        tmdb_id_final = imdb_id.split(":")[1]
+        
+        req_ptbr, req_orig = await asyncio.gather(
+            _http_client.get(f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_final}?api_key={TMDB_API_KEY}&language=pt-BR"),
+            _http_client.get(f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_final}?api_key={TMDB_API_KEY}&language=en-US"),
+            return_exceptions=True
+        )
 
-    url = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id"
-    try:
-        resp = await _http_client.get(url)
-        if resp.status_code == 200:
+        if not isinstance(req_ptbr, Exception) and req_ptbr.status_code == 200:
+            name = req_ptbr.json().get("title") or req_ptbr.json().get("name")
+            if name: titulos.append(name)
+
+        if not isinstance(req_orig, Exception) and req_orig.status_code == 200:
+            name = req_orig.json().get("title") or req_orig.json().get("name")
+            if name and name not in titulos: titulos.append(name)
+            
+    else:
+        req_ptbr, req_orig = await asyncio.gather(
+            _http_client.get(f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"),
+            _http_client.get(f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=en-US"),
+            return_exceptions=True
+        )
+
+        def extrair_dados_find(resp, tipo):
+            if isinstance(resp, Exception) or resp.status_code != 200:
+                return None, None
+            
             data = resp.json()
-            if data.get("movie_results"):
-                return str(data["movie_results"][0]["id"])
-            elif data.get("tv_results"):
-                return str(data["tv_results"][0]["id"])
-    except Exception:
-        pass
-    return None
+            results = data.get(f"{tipo}_results", [])
+            
+            if results:
+                result_id = str(results[0].get("id"))
+                result_name = results[0].get("title") or results[0].get("name")
+                return result_id, result_name
+            return None, None
+
+        id_ptbr, nome_ptbr = extrair_dados_find(req_ptbr, tmdb_type)
+        if id_ptbr: tmdb_id_final = id_ptbr
+        if nome_ptbr: titulos.append(nome_ptbr)
+
+        id_orig, nome_orig = extrair_dados_find(req_orig, tmdb_type)
+        if id_orig and not tmdb_id_final: tmdb_id_final = id_orig 
+        if nome_orig and nome_orig not in titulos: titulos.append(nome_orig)
+
+    return tmdb_id_final, titulos
 
 
 async def notificar_falta_servidor(imdb_id, content_type, season=None, episode=None):
@@ -113,72 +152,6 @@ async def fetch_cinemeta(imdb_id, content_type):
         except Exception:
             pass
     return {"id": imdb_id, "type": content_type, "name": f"Conteúdo {imdb_id}"}
-
-
-async def obter_titulos_publicos(imdb_id, content_type):
-    titulos = []
-    tmdb_type = "movie" if content_type == "movie" else "tv"
-    is_tmdb = imdb_id.startswith("tmdb:")
-    tmdb_id_num = imdb_id.split(":")[1] if is_tmdb else None
-
-    try:
-        if is_tmdb:
-            req_ptbr, req_orig = await asyncio.gather(
-                _http_client.get(f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_num}?api_key={TMDB_API_KEY}&language=pt-BR"),
-                _http_client.get(f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_num}?api_key={TMDB_API_KEY}&language=en-US"),
-                return_exceptions=True
-            )
-
-            if not isinstance(req_ptbr, Exception) and req_ptbr.status_code == 200:
-                name = req_ptbr.json().get("title") or req_ptbr.json().get("name")
-                if name: titulos.append(name)
-
-            if not isinstance(req_orig, Exception) and req_orig.status_code == 200:
-                name = req_orig.json().get("title") or req_orig.json().get("name")
-                if name and name not in titulos: titulos.append(name)
-        else:
-            req_ptbr, req_orig = await asyncio.gather(
-                _http_client.get(f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"),
-                _http_client.get(f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=en-US"),
-                return_exceptions=True
-            )
-
-            def extrair_nome_tmdb(resp, tipo):
-                if isinstance(resp, Exception) or resp.status_code != 200:
-                    return None
-                data = resp.json()
-                results = data.get(f"{tipo}_results", [])
-                if results:
-                    return results[0].get("title") or results[0].get("name")
-                return None
-
-            nome_ptbr = extrair_nome_tmdb(req_ptbr, tmdb_type)
-            nome_orig = extrair_nome_tmdb(req_orig, tmdb_type)
-            if nome_ptbr: titulos.append(nome_ptbr)
-            if nome_orig and nome_orig not in titulos: titulos.append(nome_orig)
-
-    except Exception as e:
-        print(f"[DEBUG - APP] Erro direto no TMDB: {e}")
-
-    if not titulos:
-        try:
-            req_pt_addon, req_cinemeta = await asyncio.gather(
-                _http_client.get(f"https://94c8cb9f702d-tmdb-addon.baby-beamup.club/pt-BR/meta/{content_type}/{imdb_id}.json"),
-                _http_client.get(f"https://v3-cinemeta.strem.io/meta/{content_type}/{imdb_id}.json"),
-                return_exceptions=True
-            )
-            if not isinstance(req_pt_addon, Exception) and req_pt_addon.status_code == 200:
-                nome_pt = req_pt_addon.json().get("meta", {}).get("name")
-                if nome_pt and not nome_pt.startswith("Conteúdo ") and nome_pt not in titulos:
-                    titulos.append(nome_pt)
-            if not isinstance(req_cinemeta, Exception) and req_cinemeta.status_code == 200:
-                nome_en = req_cinemeta.json().get("meta", {}).get("name")
-                if nome_en and not nome_en.startswith("Conteúdo ") and nome_en not in titulos:
-                    titulos.append(nome_en)
-        except Exception as e:
-            print(f"[DEBUG - APP] Erro nos add-ons públicos: {e}")
-
-    return titulos
 
 
 async def build_recent_catalog():
@@ -283,18 +256,12 @@ async def stream(type: str, id: str, request: Request):
         if type == 'series' and len(parts) >= 3:
             season, episode = int(parts[1]), int(parts[2])
 
-    print("[DEBUG - APP] Iniciando consultas base de forma assíncrona...")
-    
-    # Criamos as tarefas de base (API TMDB e Títulos). 
-    # Elas executam em background e guardam o resultado em cache internamente.
-    task_serve = asyncio.create_task(serve.search_serve(clean_id, type, season, episode, client=_http_client))
-    task_tmdb = asyncio.create_task(converter_imdb_para_tmdb(clean_id))
-    task_titles = asyncio.create_task(obter_titulos_publicos(clean_id, type))
+    print("[DEBUG - APP] Obtendo dados base TMDB...")
+    tmdb_id, titles = await obter_dados_base_tmdb(clean_id, type)
 
-    # Funções wrapper isoladas (cada módulo extrai só o que precisa, quando precisa)
     async def fetch_serve():
         try:
-            res = await task_serve
+            res = await serve.search_serve(clean_id, type, season, episode, client=_http_client)
             return res if res else []
         except Exception as e:
             print(f"[DEBUG - APP] Erro no serve: {e}")
@@ -302,8 +269,8 @@ async def stream(type: str, id: str, request: Request):
 
     async def fetch_streamflix():
         try:
-            titles = await task_titles
-            if not titles: return []
+            if not titles: 
+                return []
             res = await streamflix.search_serve(titles, type, season, episode, client=_http_client)
             return res if res else []
         except Exception as e:
@@ -312,9 +279,9 @@ async def stream(type: str, id: str, request: Request):
 
     async def fetch_doramogo():
         try:
-            tmdb_id = await task_tmdb
-            if not tmdb_id: return []
-            res = await doramogo.search_serve(tmdb_id, type, season, episode, client=_http_client)
+            if not tmdb_id or not titles: 
+                return []
+            res = await doramogo.search_serve(tmdb_id, titles, type, season, episode, client=_http_client)
             return res if res else []
         except Exception as e:
             print(f"[DEBUG - APP] Erro no doramogo: {e}")
@@ -322,37 +289,32 @@ async def stream(type: str, id: str, request: Request):
 
     async def fetch_mywallpaper():
         try:
-            tmdb_id = await task_tmdb
-            if not tmdb_id: return []
-            res = await mywallpaper.search_serve(tmdb_id, type, season, episode, client=_http_client)
+            if not tmdb_id or not titles: 
+                return []
+            res = await mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client)
             return res if res else []
         except Exception as e:
             print(f"[DEBUG - APP] Erro no mywallpaper: {e}")
             return []
 
-    async def fetch_fshd():
+    async def fetch_on():
         try:
-            serve_res = await task_serve
-            if serve_res: 
-                # Preserva a regra de negócio do FSHD: se o server tem, ignora FSHD
+            if not tmdb_id: 
                 return []
-            tmdb_id = await task_tmdb
-            if not tmdb_id: return []
-            res = await fshd.search_serve(tmdb_id, type, season, episode, client=_http_client)
+            res = await on.search_serve(tmdb_id, type, season, episode, client=_http_client)
             return res if res else []
         except Exception as e:
-            print(f"[DEBUG - APP] Erro no fshd: {e}")
+            print(f"[DEBUG - APP] Erro no on (Azullog): {e}")
             return []
 
     print("[DEBUG - APP] Disparando todos os scrapers de forma independente...")
     
-    # Todos arrancam ao mesmo tempo! Sem gargalos de fase.
     resultados = await asyncio.gather(
         fetch_serve(),
         fetch_streamflix(),
         fetch_doramogo(),
         fetch_mywallpaper(),
-        fetch_fshd(),
+        fetch_on(),
         return_exceptions=True
     )
 
@@ -366,7 +328,6 @@ async def stream(type: str, id: str, request: Request):
                 if not stream_info.get("url"):
                     continue
                 if "behaviorHints" not in stream_info:
-                    # Serve local pode ter "fenixflix-serve", então preservamos se já existir
                     stream_info["behaviorHints"] = {
                         "notWebReady": False,
                         "bingeGroup": "fenixflix"

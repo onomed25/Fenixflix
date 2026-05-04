@@ -1,4 +1,3 @@
-# mywallpaper.py
 import re
 import unicodedata
 import asyncio
@@ -485,7 +484,6 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
         print(f"[DEBUG - MyWallpaper] Eroare majoră în timpul căutării MyWallpaper: {e}")
         return []
 
-# --- BLOCO DE TESTES ---
 if __name__ == "__main__":
     async def testar_mywallpaper():
         print("=== Teste Isolado: MYWALLPAPER ===")

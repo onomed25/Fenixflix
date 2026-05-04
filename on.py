@@ -4,98 +4,97 @@ import re
 from urllib.parse import unquote
 import asyncio
 
-async def search_serve(tmdb_id: str, content_type: str, season=None, episode=None):
-    streams = []
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
 
-    print(f"\n[Azullog Debug] Iniciando busca para TMDB ID: {tmdb_id} | Tipo: {content_type} | S{season}E{episode}")
+async def extrair_link(label, target_url, client):
+    try:
+        print(f"[Azullog Debug] Testando link direto: {target_url}")
+        res = await client.get(target_url, headers={"User-Agent": USER_AGENT, "accept": "*/*"})
+        
+        if res.status_code != 200:
+            print(f"[Azullog Debug] Status {res.status_code} - Ignorando {label}.")
+            return None
 
-    # Este else foi mantido pois define a URL corretamente
-    if content_type == "movie":
-        url = f"https://azullog.site/filme/{tmdb_id}"
-    else:
-        url = f"https://azullog.site/serie/{tmdb_id}/{season}/{episode}"
-
-    print(f"[Azullog Debug] URL alvo: {url}")
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-        "accept": "*/*"
-    }
-
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-        try:
-            res = await client.get(url, headers=headers)
-
-            if res.status_code != 200:
-                print("[Azullog Debug] Falha ao aceder à página. Abortando extração.")
-                return streams
-
-            soup = BeautifulSoup(res.text, 'html.parser')
-            select_items = soup.select("div.player_select_item")
-
-            if not select_items:
-                iframe = soup.select_one("iframe")
-                if iframe and iframe.get("src"):
-                    src = iframe.get("src")
-                    final_url = "https:" + src if src.startswith("//") else src
-                    streams.append({"name": "FenixFlix", "description": "Player Direto\nAzullog", "url": final_url, "behaviorHints": {"notWebReady": False}})
+        soup = BeautifulSoup(res.text, 'lxml')
+        
+        iframe = soup.select_one("iframe[src*='player_2.php']")
+        if not iframe:
+            print(f"[Azullog Debug] Nenhum iframe do player_2 encontrado para {label}.")
+            return None
+            
+        player_url = iframe.get("src")
+        if player_url.startswith("//"):
+            player_url = "https:" + player_url
+            
+        print(f"[Azullog Debug] Resolvendo player ({label}): {player_url}")
+        
+        res2 = await client.get(player_url, headers={"referer": target_url, "User-Agent": USER_AGENT})
+        
+        api_url_match = re.search(r"const apiUrl = `([^`]+)`", res2.text)
+        if api_url_match:
+            api_url = api_url_match.group(1)
+            mediafire_enc_match = re.search(r"[?&]url=([^&]+)", api_url)
+            if mediafire_enc_match:
+                mediafire_url = unquote(mediafire_enc_match.group(1))
+                print(f"[Azullog Debug] Mediafire URL encontrada ({label}): {mediafire_url}")
                 
-                return streams
+                mf_res = await client.get(mediafire_url, headers={"User-Agent": USER_AGENT})
+                mf_soup = BeautifulSoup(mf_res.text, 'lxml')
+                download_btn = mf_soup.select_one("a#downloadButton")
+                
+                if download_btn:
+                    final_mp4 = download_btn.get("href")
+                    print(f"[Azullog Debug] Sucesso ({label})! MP4 extraído.")
+                    return {
+                        "name": "FenixFlix",
+                        "description": f"{label}\nON",
+                        "url": final_mp4,
+                        "behaviorHints": {"notWebReady": False, "bingeGroup": f"fenixflix-azullog-{label.lower()}"}
+                    }
+                else:
+                    print(f"[Azullog Debug] Botão MP4 não encontrado no Mediafire ({label}).")
+    except Exception as e:
+        print(f"[Azullog Debug] Erro durante a extração de {label}: {e}")
+    
+    return None
 
-            for item in select_items:
-                data_embed = item.get("data-embed")
-                name_el = item.select_one("div.player_select_name")
-                label = name_el.text.strip() if name_el else "Player"
+async def search_serve(tmdb_id: str, content_type: str, season=None, episode=None, client: httpx.AsyncClient = None):
+    streams = []
+    urls_to_check = []
 
-                if not data_embed:
-                    continue
+    print(f"\n[Azullog Debug] Iniciando busca inteligente para TMDB ID: {tmdb_id} | Tipo: {content_type} | S{season}E{episode}")
 
-                if "filecdn" in data_embed:
-                    data_embed = re.sub(r"filecdn\d*\.site", "1take.lat", data_embed)
+    if content_type == "movie":
+        urls_to_check.append(("Dublado", f"https://1take.lat/e/tmdb{tmdb_id}dub"))
+        urls_to_check.append(("Legendado", f"https://1take.lat/e/tmdb{tmdb_id}leg"))
+    else:
+        urls_to_check.append(("Dublado", f"https://1take.lat/e/tvtmdb{tmdb_id}t{season}e{episode}dub"))
+        urls_to_check.append(("Legendado", f"https://1take.lat/e/tvtmdb{tmdb_id}t{season}e{episode}leg"))
 
-                try:
-                    print(f"[Azullog Debug] Acessando link do embed...")
-                    res2 = await client.get(data_embed, headers={"referer": url, "User-Agent": headers["User-Agent"]})
-                    soup2 = BeautifulSoup(res2.text, 'html.parser')
+    close_client = False
+    if client is None:
+        client = httpx.AsyncClient(timeout=15.0, follow_redirects=True)
+        close_client = True
 
-                    iframe = soup2.select_one("iframe[src*='player_2.php']")
-                    if iframe:
-                        player_url = iframe.get("src")
-                        if player_url.startswith("//"):
-                            player_url = "https:" + player_url
+    try:
+        # Dispara a busca de ambos (Dublado e Legendado) ao mesmo tempo
+        tarefas = [extrair_link(label, target_url, client) for label, target_url in urls_to_check]
+        resultados = await asyncio.gather(*tarefas)
+        
+        # Filtra e adiciona apenas os links que foram encontrados com sucesso
+        streams.extend([res for res in resultados if res])
 
-                        res3 = await client.get(player_url, headers={"referer": data_embed, "User-Agent": headers["User-Agent"]})
-                        api_url_match = re.search(r"const apiUrl = `([^`]+)`", res3.text)
-
-                        if api_url_match:
-                            api_url = api_url_match.group(1)
-                            mediafire_enc_match = re.search(r"[?&]url=([^&]+)", api_url)
-
-                            if mediafire_enc_match:
-                                mediafire_url = unquote(mediafire_enc_match.group(1))
-
-                                mf_res = await client.get(mediafire_url, headers={"Referer": player_url, "User-Agent": headers["User-Agent"]})
-                                mf_soup = BeautifulSoup(mf_res.text, 'html.parser')
-                                download_btn = mf_soup.select_one("a#downloadButton")
-
-                                if download_btn:
-                                    final_mf_link = download_btn.get("href")
-                                    streams.append({
-                                        "name": "FenixFlix",
-                                        "description": f"{label}\nON",
-                                        "url": final_mf_link,
-                                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-azullog"}
-                                    })
-                                    continue
-
-                    print("[Azullog Debug] Tentando extrair um iframe genérico do embed...")
-                    any_iframe = soup2.select_one("iframe")
-                    print("[Azullog Debug] Nenhum iframe de vídeo encontrado neste player.")
-
-                except Exception as inner_e:
-                    continue
-
-        except Exception as e:
-            print(f"[Azullog Debug] Erro global na execução do scraper: {e}")
+    finally:
+        if close_client:
+            await client.aclose()
 
     return streams
+
+if __name__ == "__main__":
+    async def rodar_teste():
+        streams_serie = await search_serve("65493", "series", season=1, episode=2)
+        print("Série:", streams_serie)
+        streams_filme = await search_serve("550", "movie")
+        print("Filme:", streams_filme)
+
+    asyncio.run(rodar_teste())
