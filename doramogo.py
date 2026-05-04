@@ -134,7 +134,7 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
             stream_url = f"{CDN_PROXY}/{first_letter}/{slug}/stream/stream.m3u8?nocache={timestamp}"
         else:
             stream_url = f"{CDN_PROXY}/{first_letter}/{slug}/{season_padded}-temporada/{ep_padded}/stream.m3u8?nocache={timestamp}"
-        
+
         if await test_url(client, stream_url):
             print(f"[DEBUG - Doramogo] Fluxo final encontrado e adicionado com sucesso! URL: {stream_url}")
             return {
@@ -144,7 +144,7 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
                 "type": "hls",
                 "behaviorHints": {
                     "bingeGroup": "doramogo",
-                    "notWebReady": True, 
+                    "notWebReady": True,
                     "proxyHeaders": {
                         "request": {
                             "Referer": "https://www.doramogo.net/",
@@ -161,24 +161,33 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
     for task_result in asyncio.as_completed(tasks):
         try:
             resultado = await task_result
-            if resultado:  # Achou um link que funciona!
+            if resultado:
                 streams.append(resultado)
-                
+
                 for t in tasks:
                     if not t.done():
                         t.cancel()
-                
-                break 
+
+                break
         except Exception as e:
             print(f"[DEBUG - Doramogo] Erro ao aguardar tarefa: {e}")
 
     if not streams:
         print("[DEBUG - Doramogo] Nenhum fluxo encontrado para as variações testadas.")
-    
+
     return streams
 
-if __name__ == "__main__":
-    async def testar_doramogo():
-        async with httpx.AsyncClient(verify=False) as client:
+# --- FUNÇÃO DE TESTE ISOLADA ---
+async def testar_doramogo():
+    # O cliente (client) é aberto aqui e passado para a função que precisa dele
+    async with httpx.AsyncClient(verify=False) as client:
+        print("\n--- Iniciando teste manual do script ---")
+        # Exemplo: Testando com Game of Thrones (ID: 1399), série, temporada 1, ep 1
+        resultado = await search_serve('1399', 'series', 1, 1, client)
+        print("\n--- Resultado Final ---")
+        print(resultado)
 
+# --- EXECUÇÃO PRINCIPAL ---
+if __name__ == "__main__":
+    # O asyncio.run roda a função de teste assíncrona
     asyncio.run(testar_doramogo())
