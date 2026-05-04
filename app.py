@@ -1,4 +1,4 @@
-# app.py (OTIMIZADO)
+# app.py
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -18,8 +18,8 @@ from dotenv import load_dotenv
 import serve
 import justwatch
 import streamflix
-import doramogo 
-import mywallpaper 
+import doramogo
+import mywallpaper
 import on
 
 load_dotenv()
@@ -72,10 +72,10 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str):
     tmdb_id_final = None
     titulos = []
     tmdb_type = "movie" if content_type == "movie" else "tv"
-    
+
     if imdb_id.startswith("tmdb:"):
         tmdb_id_final = imdb_id.split(":")[1]
-        
+
         req_ptbr, req_orig = await asyncio.gather(
             _http_client.get(f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_final}?api_key={TMDB_API_KEY}&language=pt-BR"),
             _http_client.get(f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_final}?api_key={TMDB_API_KEY}&language=en-US"),
@@ -89,7 +89,7 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str):
         if not isinstance(req_orig, Exception) and req_orig.status_code == 200:
             name = req_orig.json().get("title") or req_orig.json().get("name")
             if name and name not in titulos: titulos.append(name)
-            
+
     else:
         req_ptbr, req_orig = await asyncio.gather(
             _http_client.get(f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"),
@@ -100,10 +100,10 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str):
         def extrair_dados_find(resp, tipo):
             if isinstance(resp, Exception) or resp.status_code != 200:
                 return None, None
-            
+
             data = resp.json()
             results = data.get(f"{tipo}_results", [])
-            
+
             if results:
                 result_id = str(results[0].get("id"))
                 result_name = results[0].get("title") or results[0].get("name")
@@ -115,7 +115,7 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str):
         if nome_ptbr: titulos.append(nome_ptbr)
 
         id_orig, nome_orig = extrair_dados_find(req_orig, tmdb_type)
-        if id_orig and not tmdb_id_final: tmdb_id_final = id_orig 
+        if id_orig and not tmdb_id_final: tmdb_id_final = id_orig
         if nome_orig and nome_orig not in titulos: titulos.append(nome_orig)
 
     return tmdb_id_final, titulos
@@ -242,7 +242,8 @@ async def catalog_endpoint(type: str, id: str, extra: str = None):
 @app.get("/stream/{type}/{id}.json")
 @limiter.limit("15/minute")
 async def stream(type: str, id: str, request: Request):
-    print(f"\n[DEBUG - APP] Novo pedido recebido - ID: {id}, Tipo: {type}")
+    print(f"\n=======================================================")
+    print(f"[DEBUG - APP] 🎬 NOVO PEDIDO RECEBIDO - ID: {id}, Tipo: {type}")
     season, episode = None, None
 
     if id.startswith("tmdb:"):
@@ -256,59 +257,56 @@ async def stream(type: str, id: str, request: Request):
         if type == 'series' and len(parts) >= 3:
             season, episode = int(parts[1]), int(parts[2])
 
-    print("[DEBUG - APP] Obtendo dados base TMDB...")
+    print("[DEBUG - APP] Buscando informações no TMDB...")
     tmdb_id, titles = await obter_dados_base_tmdb(clean_id, type)
+
+    print(f"[DEBUG - APP] Resultado TMDB -> ID: {tmdb_id} | Títulos encontrados: {titles}")
 
     async def fetch_serve():
         try:
             res = await serve.search_serve(clean_id, type, season, episode, client=_http_client)
             return res if res else []
         except Exception as e:
-            print(f"[DEBUG - APP] Erro no serve: {e}")
             return []
 
     async def fetch_streamflix():
         try:
-            if not titles: 
-                return []
+            if not titles: return []
             res = await streamflix.search_serve(titles, type, season, episode, client=_http_client)
             return res if res else []
         except Exception as e:
-            print(f"[DEBUG - APP] Erro no streamflix: {e}")
             return []
 
     async def fetch_doramogo():
         try:
-            if not tmdb_id or not titles: 
+            if not tmdb_id or not titles:
+                print(f"[DEBUG - APP -> Doramogo] ❌ Cancelado. Faltam Títulos ou TMDB ID.")
                 return []
+
             res = await doramogo.search_serve(tmdb_id, titles, type, season, episode, client=_http_client)
+
             return res if res else []
         except Exception as e:
-            print(f"[DEBUG - APP] Erro no doramogo: {e}")
             return []
 
     async def fetch_mywallpaper():
         try:
-            if not tmdb_id or not titles: 
-                return []
+            if not tmdb_id or not titles: return []
             res = await mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client)
             return res if res else []
         except Exception as e:
-            print(f"[DEBUG - APP] Erro no mywallpaper: {e}")
             return []
 
     async def fetch_on():
         try:
-            if not tmdb_id: 
-                return []
+            if not tmdb_id: return []
             res = await on.search_serve(tmdb_id, type, season, episode, client=_http_client)
             return res if res else []
         except Exception as e:
-            print(f"[DEBUG - APP] Erro no on (Azullog): {e}")
             return []
 
-    print("[DEBUG - APP] Disparando todos os scrapers de forma independente...")
-    
+    print("[DEBUG - APP] Disparando todos os scrapers simultaneamente...")
+
     resultados = await asyncio.gather(
         fetch_serve(),
         fetch_streamflix(),
@@ -319,7 +317,7 @@ async def stream(type: str, id: str, request: Request):
     )
 
     todos_streams = []
-    
+
     for res in resultados:
         if isinstance(res, Exception):
             continue
@@ -335,10 +333,11 @@ async def stream(type: str, id: str, request: Request):
                 todos_streams.append(stream_info)
 
     if not todos_streams:
-        print("[DEBUG - APP] Nenhum fluxo encontrado. A enviar notificação de falta...")
+        print("[DEBUG - APP] Nenhum fluxo encontrado por nenhum scraper.")
         asyncio.create_task(notificar_falta_servidor(clean_id, type, season, episode))
     else:
-        print(f"[DEBUG - APP] Concluído com sucesso. Foram devolvidos {len(todos_streams)} fluxos no total.")
+        print(f"[DEBUG - APP] Concluído! Foram enviados {len(todos_streams)} links para o usuário.")
+    print(f"=======================================================\n")
 
     return JSONResponse(content={"streams": todos_streams})
 
