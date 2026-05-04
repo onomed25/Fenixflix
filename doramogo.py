@@ -4,16 +4,12 @@ import time
 import asyncio
 import httpx
 
-TMDB_API_KEY = 'b64d2f3a4212a99d64a7d4485faed7b3'
-TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 CDN_PROXY = 'https://ondemand.mylifekorea.shop'
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0',
     'Referer': 'https://www.doramogo.net/'
 }
-
-CACHE = {}
 
 def title_to_slug(title: str) -> str:
     if not title:
@@ -37,39 +33,7 @@ async def test_url(client: httpx.AsyncClient, url: str) -> bool:
         print(f"[DEBUG - Doramogo] Erro de ligação ao testar URL: {e}")
         return False
 
-async def get_tmdb_title(client: httpx.AsyncClient, tmdb_id: str, media_type: str):
-    cache_key = f"{tmdb_id}_{media_type}"
-    if cache_key in CACHE:
-        print(f"[DEBUG - Doramogo] A usar cache para TMDB ID: {tmdb_id}")
-        return CACHE[cache_key]
-
-    endpoint = 'tv' if media_type == 'series' else 'movie'
-    url = f"{TMDB_BASE_URL}/{endpoint}/{tmdb_id}?api_key={TMDB_API_KEY}&language=pt-BR"
-
-    print(f"[DEBUG - Doramogo] A consultar TMDB API: {url}")
-    try:
-        response = await client.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            title = data.get('name') if endpoint == 'tv' else data.get('title')
-
-            ano = None
-            if endpoint == 'tv' and data.get('first_air_date'):
-                ano = data['first_air_date'][:4]
-            elif endpoint == 'movie' and data.get('release_date'):
-                ano = data['release_date'][:4]
-
-            result = {'title': title, 'ano': ano}
-            CACHE[cache_key] = result
-            print(f"[DEBUG - Doramogo] Informações encontradas - Título: {title}, Ano: {ano}")
-            return result
-        else:
-            print(f"[DEBUG - Doramogo] Erro TMDB API (Status {response.status_code})")
-    except Exception as e:
-        print(f"[DEBUG - Doramogo] Exceção ao consultar TMDB: {e}")
-    return None
-
-def generate_slug_variations(base_title: str, season: int, ano: str):
+def generate_slug_variations(base_title: str, season: int):
     base_slug = title_to_slug(base_title)
     variations = []
     seen = set()
@@ -82,33 +46,22 @@ def generate_slug_variations(base_title: str, season: int, ano: str):
     words = base_slug.split('-')
 
     add(base_slug)
-    if ano:
-        add(f"{base_slug}-{ano}")
     add(f"{base_slug}-legendado")
     add(f"{base_slug}-dublado")
 
-    if ano:
-        add(f"{base_slug}-{ano}-legendado")
-        add(f"{base_slug}-{ano}-dublado")
-
     if season > 1:
         add(f"{base_slug}-{season}")
-        if ano:
-            add(f"{base_slug}-{ano}-{season}")
 
     if len(words) > 3:
         for i in range(3, len(words)):
             reduced = '-'.join(words[:i])
             add(reduced)
-            if ano:
-                add(f"{reduced}-{ano}")
             if season > 1:
                 add(f"{reduced}-{season}")
 
-    print(f"[DEBUG - Doramogo] Variações de slug geradas: {variations}")
     return variations
 
-async def search_serve(tmdb_id, media_type, season, episode, client: httpx.AsyncClient):
+async def search_serve(tmdb_id, titles, media_type, season, episode, client: httpx.AsyncClient):
     print(f"[DEBUG - Doramogo] A iniciar pesquisa - ID: {tmdb_id}, Tipo: {media_type}, S: {season}, E: {episode}")
     target_season = 1 if media_type == 'movie' else (season or 1)
     target_episode = 1 if media_type == 'movie' else (episode or 1)
@@ -116,15 +69,17 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
     season_padded = f"{target_season:02d}"
     timestamp = int(time.time() * 1000)
 
-    info = await get_tmdb_title(client, tmdb_id, media_type)
-    if not info:
-        print("[DEBUG - Doramogo] Não foi possível obter as informações do TMDB, pesquisa cancelada.")
+    if not titles:
+        print("[DEBUG - Doramogo] Nenhum título fornecido pelo app.py, pesquisa cancelada.")
         return []
 
-    title = info.get('title')
-    ano = info.get('ano')
+    todas_variacoes = []
+    for title in titles:
+        todas_variacoes.extend(generate_slug_variations(title, target_season))
 
-    slug_variations = generate_slug_variations(title, target_season, ano)
+    slug_variations = list(dict.fromkeys(todas_variacoes))
+    print(f"[DEBUG - Doramogo] Total de variações de slug geradas: {len(slug_variations)}")
+
     streams = []
 
     async def test_and_return(slug):
@@ -140,7 +95,7 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
             return {
                 "url": stream_url,
                 "name": 'FenixFlix\n1080p',
-                "title": title if media_type == 'movie' else f"Dublado\ndoramogo",
+                "title": titles[0] if media_type == 'movie' else f"Dublado\ndoramogo",
                 "type": "hls",
                 "behaviorHints": {
                     "bingeGroup": "doramogo",
@@ -177,17 +132,9 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
 
     return streams
 
-# --- FUNÇÃO DE TESTE ISOLADA ---
-async def testar_doramogo():
-    # O cliente (client) é aberto aqui e passado para a função que precisa dele
-    async with httpx.AsyncClient(verify=False) as client:
-        print("\n--- Iniciando teste manual do script ---")
-        # Exemplo: Testando com Game of Thrones (ID: 1399), série, temporada 1, ep 1
-        resultado = await search_serve('1399', 'series', 1, 1, client)
-        print("\n--- Resultado Final ---")
-        print(resultado)
-
-# --- EXECUÇÃO PRINCIPAL ---
 if __name__ == "__main__":
-    # O asyncio.run roda a função de teste assíncrona
+    async def testar_doramogo():
+        async with httpx.AsyncClient(verify=False) as client:
+            resultados = await search_serve("93405", ["Squid Game", "Round 6"], "series", 1, 1, client)
+
     asyncio.run(testar_doramogo())
