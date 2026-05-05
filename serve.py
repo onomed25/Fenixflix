@@ -93,16 +93,12 @@ async def search_serve(imdb_id, content_type, season=None, episode=None, client:
 
 
 def montar_stream(url_stream, label):
-    bases = [
-        "https://passing-melinda-onomed1-d0cbec40.koyeb.app",
-        "https://husky-denny-fenixflixaddon-ec8e842b.koyeb.app"
-    ]
+    base = "https://pro-vif9.onrender.com"
 
     if url_stream and "/stream/" in url_stream:
         path_index = url_stream.find("/stream/")
         path = url_stream[path_index:]
-        base_escolhida = random.choice(bases)
-        url_stream = f"{base_escolhida}{path}"
+        url_stream = f"{base}{path}"
 
     stream = {
         "name": "FenixFlix",

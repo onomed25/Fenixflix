@@ -40,16 +40,6 @@ async def get_tmdb_episode_date(client: httpx.AsyncClient, tmdb_id, season, epis
         return None
     return None
 
-async def get_tmdb_title(client: httpx.AsyncClient, tmdb_id):
-    url = f"{TMDB_BASE_URL}/tv/{tmdb_id}?api_key={TMDB_API_KEY}&language=en-US"
-    try:
-        response = await client.get(url)
-        if response.status_code == 200:
-            return response.json().get('name')
-    except Exception:
-        pass
-    return None
-
 async def get_tmdb_seasons_info(client: httpx.AsyncClient, tmdb_id):
     url = f"{TMDB_BASE_URL}/tv/{tmdb_id}?api_key={TMDB_API_KEY}&append_to_response=seasons"
     try:
@@ -57,6 +47,13 @@ async def get_tmdb_seasons_info(client: httpx.AsyncClient, tmdb_id):
         if response.status_code != 200: return None
         data = response.json()
         
+        idioma_original = data.get('original_language', '')
+        generos = [g.get('id') for g in data.get('genres', [])]
+        
+        if idioma_original not in ['ja', 'ko', 'zh'] or 16 not in generos:
+            print(f"[DEBUG - MyWallpaper] Ignorând TMDB ID {tmdb_id} deoarece nu pare a fi un anime.")
+            return None
+
         seasons = data.get('seasons', [])
         seasons_info = []
         total_episodes_before = 0
@@ -275,16 +272,11 @@ def generate_minimal_slugs(season_info, target_season):
         
     return list(dict.fromkeys(slugs))
 
-async def get_anilist_titles(client: httpx.AsyncClient, tmdb_id, media_type):
-    endpoint = 'tv' if media_type == 'series' else 'movie'
-    tmdb_url = f"{TMDB_BASE_URL}/{endpoint}/{tmdb_id}?api_key={TMDB_API_KEY}&language=en-US"
-
+async def get_anilist_titles(client: httpx.AsyncClient, search_title: str):
+    """
+    Agora recebe o search_title pronto, sem precisar bater no TMDB!
+    """
     try:
-        response = await client.get(tmdb_url)
-        if response.status_code != 200: return []
-        tmdb_data = response.json()
-        search_title = tmdb_data.get('name') if media_type == 'series' else tmdb_data.get('title')
-
         query = """
             query ($search: String) {
                 Media(search: $search, type: ANIME) {
@@ -341,7 +333,7 @@ def generate_slug_variations(base_title, season):
 
     return variations
 
-async def search_serve(tmdb_id, media_type, season, episode, client: httpx.AsyncClient):
+async def search_serve(tmdb_id, titles, media_type, season, episode, client: httpx.AsyncClient):
     print(f"[DEBUG - MyWallpaper] Pornire căutare - ID: {tmdb_id}, Tip: {media_type}, S: {season}, E: {episode}")
     target_season = 1 if media_type == 'movie' else (season or 1)
     target_episode = 1 if media_type == 'movie' else (episode or 1)
@@ -349,11 +341,14 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
 
     try:
         valid_streams = []
-        titles = await get_anilist_titles(client, tmdb_id, media_type)
+        
+        search_title = titles[0] if titles else ""
+        
+        anilist_titles = await get_anilist_titles(client, search_title)
 
-        if titles:
+        if anilist_titles:
             stream_map = {}
-            for title_info in titles:
+            for title_info in anilist_titles:
                 if title_info['type'] not in ('romaji', 'english'): continue
                 slug_variations = generate_slug_variations(title_info['name'], target_season)
 
@@ -377,13 +372,8 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
             all_urls = [item for sublist in stream_map.values() for item in sublist]
             print(f"[DEBUG - MyWallpaper] Au fost pregătite {len(all_urls)} adrese URL pentru testare simultană.")
 
-            async def validate_url(item):
+            async def validate_url_phase1(item):
                 if await test_url(client, item['url']):
-                    original_title = ''
-                    for k, v in stream_map.items():
-                        if any(u['url'] == item['url'] for u in v):
-                            original_title = k.split(' (')[0]
-                            break
                     print(f"[DEBUG - MyWallpaper] Flux valid găsit în prima fază: {item['url']}")
                     return {
                         "url": item['url'],
@@ -393,7 +383,7 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
                     }
                 return None
 
-            results = await asyncio.gather(*(validate_url(item) for item in all_urls))
+            results = await asyncio.gather(*(validate_url_phase1(item) for item in all_urls))
             valid_streams.extend([res for res in results if res])
 
         if not valid_streams:
@@ -403,7 +393,8 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
                 absolute_episode = calculate_absolute_episode(seasons_info, target_season, target_episode)
                 if absolute_episode:
                     abs_ep_padded = f"{absolute_episode:02d}"
-                    anime_title = await get_tmdb_title(client, tmdb_id)
+                    
+                    anime_title = search_title 
                     
                     if anime_title:
                         base_slug = title_to_slug(anime_title)
@@ -416,34 +407,35 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
                         
                         unique_slugs = list(dict.fromkeys(absolute_slugs))
 
+                        async def validate_url_phase2(url, is_dub):
+                            if await test_url(client, url):
+                                print(f"[DEBUG - MyWallpaper] Flux valid găsit (episod absolut {'dub' if is_dub else 'leg'}): {url}")
+                                return {
+                                    "url": url,
+                                    "name": f"My Wallpaper {'Dublado' if is_dub else 'Legendado'} 1080p",
+                                    "title": f"{anime_title} EP{absolute_episode}",
+                                    "behaviorHints": {"bingeGroup": "mywallpaper"}
+                                }
+                            return None
+
+                        tasks_phase2 = []
                         for slug in unique_slugs:
                             first_letter = slug[0] if slug else 't'
-
                             leg_url = f"{CDN_BASE}/stream/{first_letter}/{slug}/{abs_ep_padded}.mp4/index.m3u8"
-                            if await test_url(client, leg_url):
-                                print(f"[DEBUG - MyWallpaper] Flux valid găsit (episod absolut leg): {leg_url}")
-                                valid_streams.append({
-                                    "url": leg_url,
-                                    "name": "My Wallpaper Legendado 1080p",
-                                    "title": f"{anime_title} EP{absolute_episode}",
-                                    "behaviorHints": {"bingeGroup": "mywallpaper"}
-                                })
-
                             dub_url = f"{CDN_BASE}/stream/{first_letter}/{slug}-dublado/{abs_ep_padded}.mp4/index.m3u8"
-                            if await test_url(client, dub_url):
-                                print(f"[DEBUG - MyWallpaper] Flux valid găsit (episod absolut dub): {dub_url}")
-                                valid_streams.append({
-                                    "url": dub_url,
-                                    "name": "My Wallpaper Dublado 1080p",
-                                    "title": f"{anime_title} EP{absolute_episode}",
-                                    "behaviorHints": {"bingeGroup": "mywallpaper"}
-                                })
+                            
+                            tasks_phase2.append(validate_url_phase2(leg_url, False))
+                            tasks_phase2.append(validate_url_phase2(dub_url, True))
+                            
+                        results_p2 = await asyncio.gather(*tasks_phase2)
+                        valid_streams.extend([res for res in results_p2 if res])
 
         if not valid_streams:
             print("[DEBUG - MyWallpaper] Începerea căutării pe baza datei de difuzare (Faza 3)")
             episode_date = await get_tmdb_episode_date(client, tmdb_id, target_season, target_episode)
             if episode_date:
-                anime_title = await get_tmdb_title(client, tmdb_id)
+                anime_title = search_title
+                
                 if anime_title:
                     anilist_id = await search_anilist_id(client, anime_title)
                     if anilist_id:
@@ -455,28 +447,28 @@ async def search_serve(tmdb_id, media_type, season, episode, client: httpx.Async
                                 test_episode = season_info.get('episodeInPart', target_episode)
                                 test_ep_padded = f"{test_episode:02d}"
 
+                                async def validate_url_phase3(url, is_dub):
+                                    if await test_url(client, url):
+                                        print(f"[DEBUG - MyWallpaper] Flux găsit pe baza datei ({'dub' if is_dub else 'leg'}): {url}")
+                                        return {
+                                            "url": url,
+                                            "name": "FenixFlix",
+                                            "title": f"{'Dublado' if is_dub else 'Legendado'}\n1080p",
+                                            "behaviorHints": {"bingeGroup": "mywallpaper"}
+                                        }
+                                    return None
+
+                                tasks_phase3 = []
                                 for slug in slugs:
                                     first_letter = slug[0] if slug else 't'
-
                                     leg_url = f"{CDN_BASE}/stream/{first_letter}/{slug}/{test_ep_padded}.mp4/index.m3u8"
-                                    if await test_url(client, leg_url):
-                                        print(f"[DEBUG - MyWallpaper] Flux găsit pe baza datei (leg): {leg_url}")
-                                        valid_streams.append({
-                                            "url": leg_url,
-                                            "name": "FenixFlix",
-                                            "title": "Legendado\n1080p",
-                                            "behaviorHints": {"bingeGroup": "mywallpaper"}
-                                        })
-
                                     dub_url = f"{CDN_BASE}/stream/{first_letter}/{slug}-dublado/{test_ep_padded}.mp4/index.m3u8"
-                                    if await test_url(client, dub_url):
-                                        print(f"[DEBUG - MyWallpaper] Flux găsit pe baza datei (dub): {dub_url}")
-                                        valid_streams.append({
-                                            "url": dub_url,
-                                            "name": "FenixFlix",
-                                            "title": "Dublado\n1080p",
-                                            "behaviorHints": {"bingeGroup": "mywallpaper"}
-                                        })
+                                    
+                                    tasks_phase3.append(validate_url_phase3(leg_url, False))
+                                    tasks_phase3.append(validate_url_phase3(dub_url, True))
+                                    
+                                results_p3 = await asyncio.gather(*tasks_phase3)
+                                valid_streams.extend([res for res in results_p3 if res])
 
         print(f"[DEBUG - MyWallpaper] Proces finalizat. Total fluxuri valide returnate: {len(valid_streams)}")
         return valid_streams
@@ -488,7 +480,7 @@ if __name__ == "__main__":
     async def testar_mywallpaper():
         print("=== Teste Isolado: MYWALLPAPER ===")
         async with httpx.AsyncClient(verify=False) as client:
-            resultados = await search_serve("85937", "series", 1, 1, client)
+            resultados = await search_serve("85937", ["Demon Slayer"], "series", 1, 1, client)
             print("\nResultados Encontrados:", resultados)
 
     asyncio.run(testar_mywallpaper())
