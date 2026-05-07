@@ -33,7 +33,7 @@ if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
 
 _http_client: httpx.AsyncClient = None
-tmdb_semaphore = asyncio.Semaphore(20)
+tmdb_semaphore = asyncio.Semaphore(7)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
