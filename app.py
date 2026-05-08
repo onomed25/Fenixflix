@@ -23,7 +23,7 @@ import justwatch
 
 load_dotenv()
 
-VERSION = "1.0.6"
+VERSION = "1.0.5"
 CACHE_DIR = "cache"
 CATALOG_CACHE_TIME = 6 * 60 * 60
 SCRAPER_STATUS_FILE = os.path.join(CACHE_DIR, "scrapers_status.json")
