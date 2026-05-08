@@ -369,7 +369,7 @@ async def meta_endpoint(type: str, id: str):
             if tmdb_ptbr.get("description"):
                 base_meta["description"] = tmdb_ptbr.get("description")
             if tmdb_ptbr.get("type"):
-                base_meta["type"] = tmdb_ptbr.get("type")  imediatamente
+                base_meta["type"] = tmdb_ptbr.get("type")
 
     return JSONResponse(content={"meta": base_meta})
 
