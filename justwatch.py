@@ -4,13 +4,13 @@ import os
 import time
 
 CACHE_DIR = "cache"
-CATALOG_CACHE_TIME = 6 * 60 * 60  
+CATALOG_CACHE_TIME = 6 * 60 * 60
 
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
 
 PROVIDERS = {
-    "popular": ["nfx", "amp", "dnp", "hbm", "atp", "gla"] 
+    "popular": ["nfx", "amp", "dnp", "hbm", "atp", "gla"]
 }
 
 QUERY_CATALOG = """
@@ -53,13 +53,13 @@ def fetch_catalog(provider_key, content_type="movie", country="BR"):
     if cached: return cached
 
     url = "https://apis.justwatch.com/graphql"
-    
-    packages = PROVIDERS.get("popular") 
+
+    packages = PROVIDERS.get("popular")
     jw_type = "MOVIE" if content_type == "movie" else "SHOW"
 
     variables = {
         "country": country,
-        "language": "pt-BR", 
+        "language": "pt-BR",
         "first": 60,
         "popularTitlesSortBy": "TRENDING",
         "popularTitlesFilter": {
@@ -73,24 +73,27 @@ def fetch_catalog(provider_key, content_type="movie", country="BR"):
         response = requests.post(url, json={"operationName": "GetPopularTitles", "variables": variables, "query": QUERY_CATALOG}, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
         data = response.json()
         edges = data.get("data", {}).get("popularTitles", {}).get("edges", [])
-        
+
         metas = []
         for item in edges:
             node = item.get("node", {}).get("content", {})
             imdb_id = node.get("externalIds", {}).get("imdbId")
-            
+
             description = node.get("shortDescription")
-            
+
             if imdb_id:
                 poster = f"https://images.justwatch.com{node.get('posterUrl')}".replace("{profile}", "s332").replace("{format}", "jpg") if node.get('posterUrl') else None
+                backdrops = node.get("backdrops", [])
+                background = f"https://images.justwatch.com{backdrops[0].get('backdropUrl')}".replace("{profile}", "s1920").replace("{format}", "jpg") if backdrops else None
                 metas.append({
                     "id": imdb_id,
                     "type": content_type,
                     "name": node.get("title"),
                     "poster": poster,
-                    "description": description 
+                    "background": background,
+                    "description": description
                 })
-        
+
         if metas: save_to_cache(cache_name, metas)
         return metas
     except: return []

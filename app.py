@@ -23,7 +23,7 @@ import justwatch
 
 load_dotenv()
 
-VERSION = "1.0.5"
+VERSION = "1.0.6"
 CACHE_DIR = "cache"
 CATALOG_CACHE_TIME = 6 * 60 * 60
 SCRAPER_STATUS_FILE = os.path.join(CACHE_DIR, "scrapers_status.json")
@@ -225,19 +225,13 @@ async def get_popular_catalog_cached(content_type):
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
                 dados_salvos = json.load(f)
-                if len(dados_salvos) > 0:
-                    print(f"[DEBUG - CATÁLOGO] 📦 Servindo populares ({content_type}) direto do CACHE.")
-                    return dados_salvos
+                if len(dados_salvos) > 0: return dados_salvos
         except: pass
 
-    print(f"[DEBUG - CATÁLOGO] 🔍 Buscando catálogo popular ({content_type}) via JustWatch...")
+    # Mudança 1: Usa os dados do JustWatch diretamente (já traduzidos via query GraphQL)
     jw_metas = await asyncio.to_thread(justwatch.fetch_catalog, "popular", content_type)
+    if not jw_metas: return []
 
-    if not jw_metas:
-        print(f"[DEBUG - CATÁLOGO] ❌ Falha ao buscar no JustWatch.")
-        return []
-
-    print(f"[DEBUG - CATÁLOGO] ✅ Catálogo carregado do JustWatch com sucesso! Salvando no cache...")
     if jw_metas:
         try:
             with open(cache_file, "w", encoding="utf-8") as f:
@@ -297,19 +291,13 @@ async def meta_endpoint(type: str, id: str):
             except: pass
         return None
 
-    print(f"\n[DEBUG - META] Buscando metadados para {id} ({type}) no Cinemeta...")
+    # Mudança 2: Busca Sequencial - Cinemeta Primeiro
     base_meta = await get_cinemeta()
 
-    if base_meta:
-        print(f"[DEBUG - META] ✅ Sucesso! Dados de {id} carregados via Cinemeta. (TMDB ignorado)")
-    else:
-        print(f"[DEBUG - META] ⚠️ Cinemeta falhou ou não encontrou. Recorrendo ao TMDB para {id}...")
+    # Se não houver dados no Cinemeta, recorre ao TMDB
+    if not base_meta:
         base_meta = await fetch_tmdb_meta_ptbr(id, type, full_meta=True)
-
-        if base_meta and base_meta.get("name") != f"Conteúdo {id}":
-            print(f"[DEBUG - META] 🌐 Sucesso! Dados de {id} carregados via TMDB.")
-        else:
-            print(f"[DEBUG - META] ❌ Falha geral. Criando metadados genéricos para {id}.")
+        if not base_meta:
             base_meta = {"id": id, "type": type, "name": f"Conteúdo {id}"}
 
     return JSONResponse(content={"meta": base_meta})
