@@ -24,7 +24,8 @@ load_dotenv()
 
 VERSION = "1.0.5"
 CACHE_DIR = "cache"
-CATALOG_CACHE_TIME = 6 * 60 * 60
+CATALOG_CACHE_TIME  = 6  * 60 * 60
+POPULAR_CACHE_TIME  = 24 * 60 * 60
 SCRAPER_STATUS_FILE = os.path.join(CACHE_DIR, "scrapers_status.json")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
@@ -33,6 +34,118 @@ if not os.path.exists(CACHE_DIR):
 
 _http_client: httpx.AsyncClient = None
 tmdb_semaphore = asyncio.Semaphore(7)
+
+
+def load_scraper_cache():
+    if os.path.exists(SCRAPER_STATUS_FILE):
+        try:
+            with open(SCRAPER_STATUS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_scraper_cache(cache_data):
+    try:
+        with open(SCRAPER_STATUS_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache_data, f, ensure_ascii=False, indent=2)
+    except:
+        pass
+
+
+
+async def _resolve_popular_item(tmdb_id: str, content_type: str):
+
+    tmdb_type = "movie" if content_type == "movie" else "tv"
+    url_pt = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}?api_key={TMDB_API_KEY}&language=pt-BR&append_to_response=external_ids"
+    url_en = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}?api_key={TMDB_API_KEY}&language=en-US&append_to_response=external_ids"
+
+    try:
+        async with tmdb_semaphore:
+            res_pt, res_en = await asyncio.gather(
+                _http_client.get(url_pt, timeout=5.0),
+                _http_client.get(url_en, timeout=5.0),
+                return_exceptions=True,
+            )
+
+        imdb_id = None
+        titles  = []
+
+        for res in (res_pt, res_en):
+            if isinstance(res, Exception) or res.status_code != 200:
+                continue
+            data = res.json()
+            if not imdb_id:
+                ext = data.get("external_ids") or {}
+                imdb_id = ext.get("imdb_id") or None
+            name = data.get("title") or data.get("name")
+            if name and name not in titles:
+                titles.append(name)
+
+        if imdb_id:
+            return imdb_id, tmdb_id, titles
+    except Exception as e:
+        print(f"[SCRAPER-CACHE] Erro ao resolver tmdb_id {tmdb_id}: {e}")
+
+    return None
+
+
+async def sync_scraper_cache_from_items(items: list, content_type: str):
+
+    scraper_cache = load_scraper_cache()
+
+    known_tmdb_ids = {v.get("tmdb_id") for v in scraper_cache.values() if v.get("tmdb_id")}
+
+    novos = []
+    for item in items:
+        item_id = item.get("id", "")
+        if not item_id.startswith("tmdb:"):
+            continue
+        tmdb_id = item_id.split(":")[1]
+        if tmdb_id not in known_tmdb_ids:
+            novos.append(tmdb_id)
+
+    if not novos:
+        print(f"[SCRAPER-CACHE] Nada de novo em '{content_type}' — cache já actualizado.")
+        return
+
+    print(f"[SCRAPER-CACHE] {len(novos)} itens novos em '{content_type}' — resolvendo imdb_id+titles...")
+
+    results = await asyncio.gather(
+        *[_resolve_popular_item(tmdb_id, content_type) for tmdb_id in novos],
+        return_exceptions=True,
+    )
+
+    count = 0
+    for result in results:
+        if isinstance(result, Exception) or result is None:
+            continue
+        imdb_id, tmdb_id_r, titles = result
+        if imdb_id and imdb_id not in scraper_cache:
+            scraper_cache[imdb_id] = {
+                "tmdb_id":  tmdb_id_r,
+                "titles":   titles,
+                "type":     content_type,
+                "scrapers": {},
+            }
+            count += 1
+
+    if count:
+        save_scraper_cache(scraper_cache)
+        print(f"[SCRAPER-CACHE] {count} itens novos adicionados ao cache de scrapers.")
+
+
+async def prepopulate_scraper_cache_from_popular():
+    for content_type in ("movie", "series"):
+        cache_file = os.path.join(CACHE_DIR, f"tmdb_popular_{content_type}.json")
+        if not os.path.exists(cache_file):
+            continue
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                items = json.load(f)
+            await sync_scraper_cache_from_items(items, content_type)
+        except Exception as e:
+            print(f"[SCRAPER-CACHE] Erro ao ler cache popular '{content_type}': {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,8 +156,13 @@ async def lifespan(app: FastAPI):
         limits=httpx.Limits(max_connections=100, max_keepalive_connections=30),
         verify=False,
     )
+
+    await prepopulate_scraper_cache_from_popular()
+
     yield
     await _http_client.aclose()
+
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -64,21 +182,6 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-def load_scraper_cache():
-    if os.path.exists(SCRAPER_STATUS_FILE):
-        try:
-            with open(SCRAPER_STATUS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except: return {}
-    return {}
-
-def save_scraper_cache(cache_data):
-    try:
-        with open(SCRAPER_STATUS_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache_data, f, ensure_ascii=False, indent=2)
-    except: pass
-
-
 async def obter_dados_base_tmdb(imdb_id: str, content_type: str):
     tmdb_id_final = None
     titulos = []
@@ -93,7 +196,8 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str):
         for r in reqs:
             if not isinstance(r, Exception) and r.status_code == 200:
                 name = r.json().get("title") or r.json().get("name")
-                if name and name not in titulos: titulos.append(name)
+                if name and name not in titulos:
+                    titulos.append(name)
     else:
         url_pt = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"
         url_en = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=en-US"
@@ -104,11 +208,14 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str):
                 data = r.json()
                 results = data.get(f"{tmdb_type}_results", [])
                 if results:
-                    if not tmdb_id_final: tmdb_id_final = str(results[0].get("id"))
+                    if not tmdb_id_final:
+                        tmdb_id_final = str(results[0].get("id"))
                     name = results[0].get("title") or results[0].get("name")
-                    if name and name not in titulos: titulos.append(name)
+                    if name and name not in titulos:
+                        titulos.append(name)
 
     return tmdb_id_final, titulos
+
 
 async def fetch_tmdb_meta_ptbr(item_id: str, content_type: str):
     async with tmdb_semaphore:
@@ -134,7 +241,8 @@ async def fetch_tmdb_meta_ptbr(item_id: str, content_type: str):
                             tmdb_id_final = str(other_results[0].get("id"))
                             tmdb_type = other_type
                             true_type = "series" if other_type == "tv" else "movie"
-            except: pass
+            except:
+                pass
 
         if tmdb_id_final:
             url_details = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_final}?api_key={TMDB_API_KEY}&language=pt-BR"
@@ -152,14 +260,17 @@ async def fetch_tmdb_meta_ptbr(item_id: str, content_type: str):
                         "type": true_type,
                         "name": title,
                         "poster": poster,
-                        "description": description
+                        "description": description,
+                        "_tmdb_id": tmdb_id_final,
                     }
-            except: pass
+            except:
+                pass
 
         return {"id": item_id, "type": true_type, "name": f"Conteúdo {item_id}"}
 
 
 async def build_recent_catalog():
+
     url = "http://87.106.82.84:14923/api/all"
     try:
         resp = await _http_client.get(url, timeout=30.0)
@@ -170,9 +281,11 @@ async def build_recent_catalog():
     items = all_data if isinstance(all_data, list) else list(all_data.values())
     movie_ids, series_ids = [], []
     for data in items:
-        if len(movie_ids) >= 27 and len(series_ids) >= 27: break
+        if len(movie_ids) >= 27 and len(series_ids) >= 27:
+            break
         imdb_id = data.get("id")
-        if not imdb_id: continue
+        if not imdb_id:
+            continue
         content_type = data.get("type", "movie")
         streams = data.get("streams", {})
 
@@ -181,45 +294,59 @@ async def build_recent_catalog():
         elif (content_type == "movie" or isinstance(streams, list)) and len(movie_ids) < 27:
             movie_ids.append(imdb_id)
 
-    movie_tasks = [fetch_tmdb_meta_ptbr(i, "movie") for i in movie_ids]
+    movie_tasks  = [fetch_tmdb_meta_ptbr(i, "movie")  for i in movie_ids]
     series_tasks = [fetch_tmdb_meta_ptbr(i, "series") for i in series_ids]
-    movies_raw = await asyncio.gather(*movie_tasks, return_exceptions=True)
-    series_raw = await asyncio.gather(*series_tasks, return_exceptions=True)
+    movies_raw  = await asyncio.gather(*movie_tasks,  return_exceptions=True)
+    series_raw  = await asyncio.gather(*series_tasks, return_exceptions=True)
 
-    movies = [m for m in movies_raw if isinstance(m, dict) and m.get("type") == "movie"][:25]
-    series = [s for s in series_raw if isinstance(s, dict) and s.get("type") == "series"][:25]
+    def clean(item):
+        if isinstance(item, dict):
+            return {k: v for k, v in item.items() if k != "_tmdb_id"}
+        return item
+
+    movies = [clean(m) for m in movies_raw if isinstance(m, dict) and m.get("type") == "movie"][:25]
+    series = [clean(s) for s in series_raw if isinstance(s, dict) and s.get("type") == "series"][:25]
     return {"movie": movies, "series": series}
+
 
 async def get_recent_catalog_cached(content_type):
     cache_file = os.path.join(CACHE_DIR, "server_recent_catalog.json")
+
     if os.path.exists(cache_file) and (time.time() - os.path.getmtime(cache_file)) < CATALOG_CACHE_TIME:
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
                 dados_salvos = json.load(f)
                 itens_salvos = dados_salvos.get(content_type, [])
-                if len(itens_salvos) > 0: return itens_salvos
-        except: pass
+                if itens_salvos:
+                    return itens_salvos
+        except:
+            pass
 
     catalogs = await build_recent_catalog()
-    if len(catalogs.get("movie", [])) > 0 or len(catalogs.get("series", [])) > 0:
+    if catalogs.get("movie") or catalogs.get("series"):
         try:
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(catalogs, f, ensure_ascii=False, indent=2)
-        except: pass
+        except:
+            pass
     return catalogs.get(content_type, [])
+
+
 
 async def get_popular_catalog_cached(content_type):
     cache_file = os.path.join(CACHE_DIR, f"tmdb_popular_{content_type}.json")
 
-    if os.path.exists(cache_file) and (time.time() - os.path.getmtime(cache_file)) < CATALOG_CACHE_TIME:
+    if os.path.exists(cache_file) and (time.time() - os.path.getmtime(cache_file)) < POPULAR_CACHE_TIME:
         try:
             with open(cache_file, "r", encoding="utf-8") as f:
                 dados_salvos = json.load(f)
-                if len(dados_salvos) > 0: return dados_salvos
-        except: pass
+                if dados_salvos:
+                    return dados_salvos
+        except:
+            pass
 
     tmdb_type = "movie" if content_type == "movie" else "tv"
-    url = f"https://api.themoviedb.org/3/{tmdb_type}/popular?api_key={TMDB_API_KEY}&language=pt-BR&page=1"
+    url = f"https://api.themoviedb.org/3/trending/{tmdb_type}/week?api_key={TMDB_API_KEY}&language=pt-BR&region=BR"
 
     try:
         resp = await _http_client.get(url, timeout=10.0)
@@ -241,10 +368,15 @@ async def get_popular_catalog_cached(content_type):
             try:
                 with open(cache_file, "w", encoding="utf-8") as f:
                     json.dump(metas, f, ensure_ascii=False, indent=2)
-            except: pass
+            except:
+                pass
+
+            asyncio.create_task(sync_scraper_cache_from_items(metas, content_type))
+
         return metas
     except:
         return []
+
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -262,9 +394,9 @@ async def manifest_endpoint():
         "resources": ["stream", "catalog"],
         "types": ["movie", "series"],
         "catalogs": [
-            {"type": "movie", "id": "popular", "name": "Populares"},
-            {"type": "movie", "id": "recentes_servidor", "name": "Recém Adicionado (Fenix)"},
-            {"type": "series", "id": "popular", "name": "Populares"},
+            {"type": "movie",  "id": "popular",           "name": "Populares"},
+            {"type": "movie",  "id": "recentes_servidor", "name": "Recém Adicionado (Fenix)"},
+            {"type": "series", "id": "popular",           "name": "Populares"},
             {"type": "series", "id": "recentes_servidor", "name": "Recém Adicionado (Fenix)"}
         ],
         "idPrefixes": ["tt", "tmdb"]
@@ -301,38 +433,51 @@ async def stream(type: str, id: str, request: Request):
         if type == 'series' and len(parts) >= 3:
             season, episode = int(parts[1]), int(parts[2])
 
-    tarefa_serve = asyncio.create_task(serve.search_serve(clean_id, type, season, episode, client=_http_client))
+    tarefa_serve = asyncio.create_task(
+        serve.search_serve(clean_id, type, season, episode, client=_http_client)
+    )
+
     cache_status = load_scraper_cache()
     base_id = clean_id
     entry = cache_status.get(base_id, {})
 
-    if entry:
+    if entry and entry.get("tmdb_id"):
         tmdb_id = entry.get("tmdb_id")
-        titles = entry.get("titles", [])
-        scraper_flags = entry.get("episodes", {}).get(f"{season}:{episode}", {}) if type == "series" else entry.get("scrapers", {})
+        titles  = entry.get("titles", [])
+        scraper_flags = (
+            entry.get("episodes", {}).get(f"{season}:{episode}", {})
+            if type == "series"
+            else entry.get("scrapers", {})
+        )
+        outras_tarefas = {}
+        if scraper_flags.get("doramogo")    != "N": outras_tarefas["doramogo"]    = asyncio.create_task(doramogo.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
+        if scraper_flags.get("on")          != "N": outras_tarefas["on"]          = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client))
+        if scraper_flags.get("mywallpaper") != "N": outras_tarefas["mywallpaper"] = asyncio.create_task(mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
+        if scraper_flags.get("streamflix")  != "N": outras_tarefas["streamflix"]  = asyncio.create_task(streamflix.search_serve(titles, type, season, episode, client=_http_client))
     else:
-        tmdb_id, titles = await obter_dados_base_tmdb(clean_id, type)
         scraper_flags = {}
-
-    outras_tarefas = {}
-    if scraper_flags.get("doramogo") != "N": outras_tarefas["doramogo"] = doramogo.search_serve(tmdb_id, titles, type, season, episode, client=_http_client)
-    if scraper_flags.get("on") != "N": outras_tarefas["on"] = on.search_serve(tmdb_id, type, season, episode, client=_http_client)
-    if scraper_flags.get("mywallpaper") != "N": outras_tarefas["mywallpaper"] = mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client)
-    if scraper_flags.get("streamflix") != "N": outras_tarefas["streamflix"] = streamflix.search_serve(titles, type, season, episode, client=_http_client)
+        tmdb_id, titles = await obter_dados_base_tmdb(clean_id, type)
+        outras_tarefas = {}
+        if scraper_flags.get("doramogo")    != "N": outras_tarefas["doramogo"]    = asyncio.create_task(doramogo.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
+        if scraper_flags.get("on")          != "N": outras_tarefas["on"]          = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client))
+        if scraper_flags.get("mywallpaper") != "N": outras_tarefas["mywallpaper"] = asyncio.create_task(mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
+        if scraper_flags.get("streamflix")  != "N": outras_tarefas["streamflix"]  = asyncio.create_task(streamflix.search_serve(titles, type, season, episode, client=_http_client))
 
     tarefas_para_aguardar = [tarefa_serve] + list(outras_tarefas.values())
-    names = ["serve"] + list(outras_tarefas.keys())
+    names   = ["serve"] + list(outras_tarefas.keys())
     results = await asyncio.gather(*tarefas_para_aguardar, return_exceptions=True)
 
     todos_streams = []
-    novos_flags = scraper_flags.copy()
+    novos_flags   = scraper_flags.copy()
 
     for i, res in enumerate(results):
         nome = names[i]
         if isinstance(res, Exception) or not res:
-            if nome != "serve": novos_flags[nome] = "N"
+            if nome != "serve":
+                novos_flags[nome] = "N"
             continue
-        if nome != "serve": novos_flags[nome] = "S"
+        if nome != "serve":
+            novos_flags[nome] = "S"
         for s_info in res:
             if s_info.get("url"):
                 if "behaviorHints" not in s_info:
@@ -342,7 +487,8 @@ async def stream(type: str, id: str, request: Request):
     if base_id not in cache_status:
         cache_status[base_id] = {"tmdb_id": tmdb_id, "titles": titles, "type": type}
     if type == "series":
-        if "episodes" not in cache_status[base_id]: cache_status[base_id]["episodes"] = {}
+        if "episodes" not in cache_status[base_id]:
+            cache_status[base_id]["episodes"] = {}
         cache_status[base_id]["episodes"][f"{season}:{episode}"] = novos_flags
     else:
         cache_status[base_id]["scrapers"] = novos_flags
