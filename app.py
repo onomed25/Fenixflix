@@ -153,7 +153,7 @@ async def lifespan(app: FastAPI):
     _http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(15.0, connect=5.0),
         follow_redirects=True,
-        limits=httpx.Limits(max_connections=100, max_keepalive_connections=30),
+        limits=httpx.Limits(max_connections=100, max_keepalive_connections=30, keepalive_expiry=30),
         verify=False,
     )
 
@@ -449,19 +449,18 @@ async def stream(type: str, id: str, request: Request):
             if type == "series"
             else entry.get("scrapers", {})
         )
-        outras_tarefas = {}
+    else:
+        tmdb_id, titles = await obter_dados_base_tmdb(clean_id, type)
+        scraper_flags = {}
+
+    outras_tarefas = {}
+    if tmdb_id:
         if scraper_flags.get("doramogo")    != "N": outras_tarefas["doramogo"]    = asyncio.create_task(doramogo.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
         if scraper_flags.get("on")          != "N": outras_tarefas["on"]          = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client))
         if scraper_flags.get("mywallpaper") != "N": outras_tarefas["mywallpaper"] = asyncio.create_task(mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
         if scraper_flags.get("streamflix")  != "N": outras_tarefas["streamflix"]  = asyncio.create_task(streamflix.search_serve(titles, type, season, episode, client=_http_client))
     else:
-        scraper_flags = {}
-        tmdb_id, titles = await obter_dados_base_tmdb(clean_id, type)
-        outras_tarefas = {}
-        if scraper_flags.get("doramogo")    != "N": outras_tarefas["doramogo"]    = asyncio.create_task(doramogo.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
-        if scraper_flags.get("on")          != "N": outras_tarefas["on"]          = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client))
-        if scraper_flags.get("mywallpaper") != "N": outras_tarefas["mywallpaper"] = asyncio.create_task(mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
-        if scraper_flags.get("streamflix")  != "N": outras_tarefas["streamflix"]  = asyncio.create_task(streamflix.search_serve(titles, type, season, episode, client=_http_client))
+        print(f"[APP] tmdb_id nao resolvido para '{clean_id}' — scrapers ignorados.")
 
     tarefas_para_aguardar = [tarefa_serve] + list(outras_tarefas.values())
     names   = ["serve"] + list(outras_tarefas.keys())
@@ -486,11 +485,11 @@ async def stream(type: str, id: str, request: Request):
 
     if base_id not in cache_status:
         cache_status[base_id] = {"tmdb_id": tmdb_id, "titles": titles, "type": type}
-    if type == "series":
+    if tmdb_id and type == "series":
         if "episodes" not in cache_status[base_id]:
             cache_status[base_id]["episodes"] = {}
         cache_status[base_id]["episodes"][f"{season}:{episode}"] = novos_flags
-    else:
+    elif tmdb_id:
         cache_status[base_id]["scrapers"] = novos_flags
 
     save_scraper_cache(cache_status)
