@@ -33,6 +33,7 @@ if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
 
 _http_client: httpx.AsyncClient = None
+_serve_client: httpx.AsyncClient = None
 tmdb_semaphore = asyncio.Semaphore(7)
 
 
@@ -53,9 +54,7 @@ def save_scraper_cache(cache_data):
         pass
 
 
-
 async def _resolve_popular_item(tmdb_id: str, content_type: str):
-
     tmdb_type = "movie" if content_type == "movie" else "tv"
     url_pt = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}?api_key={TMDB_API_KEY}&language=pt-BR&append_to_response=external_ids"
     url_en = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id}?api_key={TMDB_API_KEY}&language=en-US&append_to_response=external_ids"
@@ -91,9 +90,7 @@ async def _resolve_popular_item(tmdb_id: str, content_type: str):
 
 
 async def sync_scraper_cache_from_items(items: list, content_type: str):
-
     scraper_cache = load_scraper_cache()
-
     known_tmdb_ids = {v.get("tmdb_id") for v in scraper_cache.values() if v.get("tmdb_id")}
 
     novos = []
@@ -147,9 +144,12 @@ async def prepopulate_scraper_cache_from_popular():
         except Exception as e:
             print(f"[SCRAPER-CACHE] Erro ao ler cache popular '{content_type}': {e}")
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _http_client
+    global _http_client, _serve_client
+
+    # Cliente Global (TMDB, Scrapers diversos)
     _http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(15.0, connect=5.0),
         follow_redirects=True,
@@ -157,10 +157,20 @@ async def lifespan(app: FastAPI):
         verify=False,
     )
 
+    # Cliente Dedicado (Isolamento para o servidor principal de streaming)
+    _serve_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(10.0, connect=3.0),
+        follow_redirects=True,
+        limits=httpx.Limits(max_connections=50, max_keepalive_connections=20, keepalive_expiry=60),
+        verify=False,
+    )
+
     await prepopulate_scraper_cache_from_popular()
 
     yield
+
     await _http_client.aclose()
+    await _serve_client.aclose()
 
 
 
@@ -289,7 +299,7 @@ async def build_recent_catalog():
 
     url = "http://87.106.82.84:14923/api/all"
     try:
-        resp = await _http_client.get(url, timeout=30.0)
+        resp = await _serve_client.get(url, timeout=30.0) # Atualizado para usar o cliente dedicado
         all_data = resp.json() if resp.status_code == 200 else []
     except:
         return {"movie": [], "series": []}
@@ -449,23 +459,22 @@ async def stream(type: str, id: str, request: Request):
         if type == 'series' and len(parts) >= 3:
             season, episode = int(parts[1]), int(parts[2])
 
+    # 🔥 INJETANDO O CLIENTE DEDICADO AQUI 🔥
     tarefa_serve = asyncio.create_task(
-        serve.search_serve(clean_id, type, season, episode)
+        serve.search_serve(clean_id, type, season, episode, client=_serve_client)
     )
 
     cache_status = load_scraper_cache()
 
-    # Procura no cache pelo clean_id directo (ex: "tt1234567")
-    # ou, se veio como "tmdb:xxx", procura a entrada cujo tmdb_id bate
     entry = cache_status.get(clean_id)
-    base_id = clean_id  # chave usada para gravar no cache (sempre imdb)
+    base_id = clean_id
 
     if entry is None and clean_id.startswith("tmdb:"):
         tmdb_id_raw = clean_id.split(":")[1]
         for key, val in cache_status.items():
             if val.get("tmdb_id") == tmdb_id_raw:
                 entry = val
-                base_id = key  # usa a chave imdb (tt...) existente
+                base_id = key
                 print(f"[APP] Cache hit por tmdb_id: '{clean_id}' -> '{base_id}'")
                 break
 
@@ -481,7 +490,6 @@ async def stream(type: str, id: str, request: Request):
     else:
         tmdb_id, real_imdb_id, titles = await obter_dados_base_tmdb(clean_id, type, client=_http_client)
         scraper_flags = {}
-        # Gravar sempre com a chave tt... se possível, para reutilizar independentemente do formato de entrada
         if real_imdb_id and real_imdb_id.startswith("tt"):
             base_id = real_imdb_id
         else:
