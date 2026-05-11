@@ -182,39 +182,55 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-async def obter_dados_base_tmdb(imdb_id: str, content_type: str):
+async def obter_dados_base_tmdb(imdb_id: str, content_type: str, client: httpx.AsyncClient = None):
+    """Devolve (tmdb_id, real_imdb_id, titulos). real_imdb_id pode ser None se nao encontrado."""
     tmdb_id_final = None
+    real_imdb_id  = None
     titulos = []
     tmdb_type = "movie" if content_type == "movie" else "tv"
 
-    if imdb_id.startswith("tmdb:"):
-        tmdb_id_final = imdb_id.split(":")[1]
-        url_pt = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_final}?api_key={TMDB_API_KEY}&language=pt-BR"
-        url_en = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_final}?api_key={TMDB_API_KEY}&language=en-US"
-
-        reqs = await asyncio.gather(_http_client.get(url_pt), _http_client.get(url_en), return_exceptions=True)
-        for r in reqs:
-            if not isinstance(r, Exception) and r.status_code == 200:
-                name = r.json().get("title") or r.json().get("name")
-                if name and name not in titulos:
-                    titulos.append(name)
-    else:
-        url_pt = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"
-        url_en = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=en-US"
-
-        reqs = await asyncio.gather(_http_client.get(url_pt), _http_client.get(url_en), return_exceptions=True)
-        for r in reqs:
-            if not isinstance(r, Exception) and r.status_code == 200:
-                data = r.json()
-                results = data.get(f"{tmdb_type}_results", [])
-                if results:
-                    if not tmdb_id_final:
-                        tmdb_id_final = str(results[0].get("id"))
-                    name = results[0].get("title") or results[0].get("name")
+    async def _do_requests(c):
+        nonlocal tmdb_id_final, real_imdb_id
+        if imdb_id.startswith("tmdb:"):
+            tmdb_id_final = imdb_id.split(":")[1]
+            url_pt = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_final}?api_key={TMDB_API_KEY}&language=pt-BR&append_to_response=external_ids"
+            url_en = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_final}?api_key={TMDB_API_KEY}&language=en-US&append_to_response=external_ids"
+            reqs = await asyncio.gather(c.get(url_pt), c.get(url_en), return_exceptions=True)
+            for r in reqs:
+                if not isinstance(r, Exception) and r.status_code == 200:
+                    data = r.json()
+                    if not real_imdb_id:
+                        real_imdb_id = (data.get("external_ids") or {}).get("imdb_id") or None
+                    name = data.get("title") or data.get("name")
                     if name and name not in titulos:
                         titulos.append(name)
+        else:
+            real_imdb_id = imdb_id
+            url_pt = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"
+            url_en = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=en-US"
+            reqs = await asyncio.gather(c.get(url_pt), c.get(url_en), return_exceptions=True)
+            for r in reqs:
+                if not isinstance(r, Exception) and r.status_code == 200:
+                    data = r.json()
+                    results = data.get(f"{tmdb_type}_results", [])
+                    if results:
+                        if not tmdb_id_final:
+                            tmdb_id_final = str(results[0].get("id"))
+                        name = results[0].get("title") or results[0].get("name")
+                        if name and name not in titulos:
+                            titulos.append(name)
 
-    return tmdb_id_final, titulos
+    try:
+        await _do_requests(client or _http_client)
+    except Exception as e:
+        print(f"[TMDB] Cliente global falhou ({e}), a criar cliente temporario...")
+        try:
+            async with httpx.AsyncClient(timeout=10.0, verify=False) as tmp:
+                await _do_requests(tmp)
+        except Exception as e2:
+            print(f"[TMDB] Cliente temporario tambem falhou: {e2}")
+
+    return tmdb_id_final, real_imdb_id, titulos
 
 
 async def fetch_tmdb_meta_ptbr(item_id: str, content_type: str):
@@ -434,12 +450,24 @@ async def stream(type: str, id: str, request: Request):
             season, episode = int(parts[1]), int(parts[2])
 
     tarefa_serve = asyncio.create_task(
-        serve.search_serve(clean_id, type, season, episode, client=_http_client)
+        serve.search_serve(clean_id, type, season, episode)
     )
 
     cache_status = load_scraper_cache()
-    base_id = clean_id
-    entry = cache_status.get(base_id, {})
+
+    # Procura no cache pelo clean_id directo (ex: "tt1234567")
+    # ou, se veio como "tmdb:xxx", procura a entrada cujo tmdb_id bate
+    entry = cache_status.get(clean_id)
+    base_id = clean_id  # chave usada para gravar no cache (sempre imdb)
+
+    if entry is None and clean_id.startswith("tmdb:"):
+        tmdb_id_raw = clean_id.split(":")[1]
+        for key, val in cache_status.items():
+            if val.get("tmdb_id") == tmdb_id_raw:
+                entry = val
+                base_id = key  # usa a chave imdb (tt...) existente
+                print(f"[APP] Cache hit por tmdb_id: '{clean_id}' -> '{base_id}'")
+                break
 
     if entry and entry.get("tmdb_id"):
         tmdb_id = entry.get("tmdb_id")
@@ -449,9 +477,15 @@ async def stream(type: str, id: str, request: Request):
             if type == "series"
             else entry.get("scrapers", {})
         )
+        print(f"[APP] Cache hit para '{base_id}' — tmdb_id={tmdb_id}")
     else:
-        tmdb_id, titles = await obter_dados_base_tmdb(clean_id, type)
+        tmdb_id, real_imdb_id, titles = await obter_dados_base_tmdb(clean_id, type, client=_http_client)
         scraper_flags = {}
+        # Gravar sempre com a chave tt... se possível, para reutilizar independentemente do formato de entrada
+        if real_imdb_id and real_imdb_id.startswith("tt"):
+            base_id = real_imdb_id
+        else:
+            base_id = clean_id
 
     outras_tarefas = {}
     if tmdb_id:
