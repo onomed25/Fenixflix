@@ -22,13 +22,13 @@ def title_to_slug(title: str) -> str:
 async def test_url(client: httpx.AsyncClient, url: str) -> bool:
     print(f"[DEBUG - Doramogo] A testar URL: {url}")
     try:
-        response = await client.head(url, headers=HEADERS)
-        if response.status_code in (200, 206):
-            print(f"[DEBUG - Doramogo] Sucesso (Status {response.status_code}): {url}")
-            return True
-        else:
-            print(f"[DEBUG - Doramogo] Falhou (Status {response.status_code}): {url}")
-            return False
+        async with client.stream("HEAD", url, headers=HEADERS) as response:
+            if response.status_code in (200, 206):
+                print(f"[DEBUG - Doramogo] Sucesso (Status {response.status_code}): {url}")
+                return True
+            else:
+                print(f"[DEBUG - Doramogo] Falhou (Status {response.status_code}): {url}")
+                return False
     except Exception as e:
         print(f"[DEBUG - Doramogo] Erro de ligação ao testar URL: {e}")
         return False

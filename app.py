@@ -11,6 +11,7 @@ import os
 import time
 import json
 import uvicorn
+import aiofiles
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
@@ -46,13 +47,12 @@ def load_scraper_cache():
             return {}
     return {}
 
-def save_scraper_cache(cache_data):
+async def save_scraper_cache(cache_data):
     try:
-        with open(SCRAPER_STATUS_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache_data, f, ensure_ascii=False, indent=2)
-    except:
+        async with aiofiles.open(SCRAPER_STATUS_FILE, mode="w", encoding="utf-8") as f:
+            await f.write(json.dumps(cache_data, ensure_ascii=False, indent=2))
+    except Exception as e:
         pass
-
 
 
 async def _resolve_popular_item(tmdb_id: str, content_type: str):
@@ -132,7 +132,7 @@ async def sync_scraper_cache_from_items(items: list, content_type: str):
             count += 1
 
     if count:
-        save_scraper_cache(scraper_cache)
+        await save_scraper_cache(scraper_cache)
         print(f"[SCRAPER-CACHE] {count} itens novos adicionados ao cache de scrapers.")
 
 
@@ -462,34 +462,41 @@ async def stream(type: str, id: str, request: Request):
     )
 
     cache_status = load_scraper_cache()
-
-    # Procura no cache pelo clean_id directo (ex: "tt1234567")
-    # ou, se veio como "tmdb:xxx", procura a entrada cujo tmdb_id bate
     entry = cache_status.get(clean_id)
-    base_id = clean_id  # chave usada para gravar no cache (sempre imdb)
+    base_id = clean_id
 
     if entry is None and clean_id.startswith("tmdb:"):
         tmdb_id_raw = clean_id.split(":")[1]
         for key, val in cache_status.items():
             if val.get("tmdb_id") == tmdb_id_raw:
                 entry = val
-                base_id = key  # usa a chave imdb (tt...) existente
+                base_id = key
                 print(f"[APP] Cache hit por tmdb_id: '{clean_id}' -> '{base_id}'")
                 break
 
     if entry and entry.get("tmdb_id"):
         tmdb_id = entry.get("tmdb_id")
         titles  = entry.get("titles", [])
-        scraper_flags = (
-            entry.get("episodes", {}).get(f"{season}:{episode}", {})
-            if type == "series"
-            else entry.get("scrapers", {})
-        )
-        print(f"[APP] Cache hit para '{base_id}' — tmdb_id={tmdb_id}")
+
+        if type == "series":
+            ep_cache = entry.get("episodes", {}).get(f"{season}:{episode}")
+            if isinstance(ep_cache, dict) and "streams_data" in ep_cache:
+                print(f"[APP] FAST HIT! Streams da série já em cache para '{base_id}' S{season}E{episode}")
+                return JSONResponse(content={"streams": ep_cache["streams_data"]})
+            elif isinstance(ep_cache, dict):
+                scraper_flags = ep_cache.get("flags", ep_cache)
+            else:
+                scraper_flags = {}
+        else:
+            if "streams_data" in entry:
+                print(f"[APP] FAST HIT! Streams do filme já em cache para '{base_id}'")
+                return JSONResponse(content={"streams": entry["streams_data"]})
+            scraper_flags = entry.get("scrapers", {})
+
+        print(f"[APP] Cache hit para '{base_id}' — tmdb_id={tmdb_id} (apenas flags)")
     else:
         tmdb_id, real_imdb_id, titles = await obter_dados_base_tmdb(clean_id, type, client=_http_client)
         scraper_flags = {}
-        # Gravar sempre com a chave tt... se possível, para reutilizar independentemente do formato de entrada
         if real_imdb_id and real_imdb_id.startswith("tt"):
             base_id = real_imdb_id
         else:
@@ -527,14 +534,19 @@ async def stream(type: str, id: str, request: Request):
 
     if base_id not in cache_status:
         cache_status[base_id] = {"tmdb_id": tmdb_id, "titles": titles, "type": type}
+
     if tmdb_id and type == "series":
         if "episodes" not in cache_status[base_id]:
             cache_status[base_id]["episodes"] = {}
-        cache_status[base_id]["episodes"][f"{season}:{episode}"] = novos_flags
+        cache_status[base_id]["episodes"][f"{season}:{episode}"] = {
+            "flags": novos_flags,
+            "streams_data": todos_streams
+        }
     elif tmdb_id:
         cache_status[base_id]["scrapers"] = novos_flags
+        cache_status[base_id]["streams_data"] = todos_streams
 
-    save_scraper_cache(cache_status)
+    await save_scraper_cache(cache_status)
     return JSONResponse(content={"streams": todos_streams})
 
 
