@@ -11,10 +11,6 @@ TAPECONTENT_HEADERS = {
 }
 
 async def search_serve(imdb_id, content_type, season=None, episode=None, client: httpx.AsyncClient = None):
-    """
-    Busca streams no servidor remoto e formata para o Stremio usando httpx.
-    Aceita um cliente httpx partilhado (pool de conexões) ou cria o seu próprio.
-    """
     url = f"http://87.106.82.84:14923/{imdb_id}"
 
     async def _fetch(c):
@@ -37,7 +33,6 @@ async def search_serve(imdb_id, content_type, season=None, episode=None, client:
 
         streams_formatados = []
 
-        # 🔥 SÉRIES
         if content_type == 'series' and season and episode:
             season_str = str(season)
             episode_str = str(episode)
@@ -63,7 +58,6 @@ async def search_serve(imdb_id, content_type, season=None, episode=None, client:
 
             return streams_formatados
 
-        # 🔥 FILMES
         elif content_type == 'movie':
             potential_streams = local_data.get('streams', [])
             if not potential_streams:
@@ -93,7 +87,11 @@ async def search_serve(imdb_id, content_type, season=None, episode=None, client:
 
 
 def montar_stream(url_stream, label):
-    base = "https://pro-vif9.onrender.com"
+    bases = [
+        "https://husky-denny-fenixflixaddon-ec8e842b.koyeb.app",
+        "https://passing-melinda-onomed1-d0cbec40.koyeb.app"
+    ]
+    base = random.choice(bases)
 
     if url_stream and "/stream/" in url_stream:
         path_index = url_stream.find("/stream/")
