@@ -61,7 +61,7 @@ def generate_slug_variations(base_title: str, season: int):
 
     return variations
 
-async def search_serve(tmdb_id, titles, media_type, season, episode, client: httpx.AsyncClient):
+async def search_serve(tmdb_id, titles, media_type, season, episode, client: httpx.AsyncClient, slug_cached: str = None):
     print(f"[DEBUG - Doramogo] A iniciar pesquisa - ID: {tmdb_id}, Tipo: {media_type}, S: {season}, E: {episode}")
     target_season = 1 if media_type == 'movie' else (season or 1)
     target_episode = 1 if media_type == 'movie' else (episode or 1)
@@ -74,6 +74,11 @@ async def search_serve(tmdb_id, titles, media_type, season, episode, client: htt
         return []
 
     todas_variacoes = []
+
+    if slug_cached:
+        print(f"[DEBUG - Doramogo] Slug em cache encontrado, a testar primeiro: '{slug_cached}'")
+        todas_variacoes.append(slug_cached)
+
     for title in titles:
         todas_variacoes.extend(generate_slug_variations(title, target_season))
 
@@ -97,6 +102,7 @@ async def search_serve(tmdb_id, titles, media_type, season, episode, client: htt
                 "name": 'FenixFlix\n1080p',
                 "title": titles[0] if media_type == 'movie' else f"Dublado\ndoramogo",
                 "type": "hls",
+                "_slug_found": slug,
                 "behaviorHints": {
                     "bingeGroup": "doramogo",
                     "notWebReady": True,
