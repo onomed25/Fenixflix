@@ -2,7 +2,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -38,22 +37,7 @@ _http_client: httpx.AsyncClient = None
 _serve_client: httpx.AsyncClient = None
 tmdb_semaphore = asyncio.Semaphore(7)
 
-# --- VARIÁVEIS PARA O CONTADOR ONLINE ---
-_active_ips = {}
-_total_requests = 0
-
-class CounterMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        global _total_requests
-        _total_requests += 1
-        client_ip = request.client.host
-        _active_ips[client_ip] = time.time()
-        response = await call_next(request)
-        return response
-# ----------------------------------------
-
 def load_scraper_cache():
-    # Removido o bloqueio de tempo daqui! A limpeza agora ocorre atrelada ao catálogo recente.
     if os.path.exists(SCRAPER_STATUS_FILE):
         try:
             with open(SCRAPER_STATUS_FILE, "r", encoding="utf-8") as f:
@@ -68,7 +52,6 @@ async def save_scraper_cache(cache_data):
             await f.write(json.dumps(cache_data, ensure_ascii=False, indent=2))
     except Exception as e:
         pass
-
 
 async def _resolve_popular_item(tmdb_id: str, content_type: str):
     tmdb_type = "movie" if content_type == "movie" else "tv"
@@ -103,7 +86,6 @@ async def _resolve_popular_item(tmdb_id: str, content_type: str):
         print(f"[SCRAPER-CACHE] Erro ao resolver tmdb_id {tmdb_id}: {e}")
 
     return None
-
 
 async def sync_scraper_cache_from_items(items: list, content_type: str):
     scraper_cache = load_scraper_cache()
@@ -148,7 +130,6 @@ async def sync_scraper_cache_from_items(items: list, content_type: str):
         await save_scraper_cache(scraper_cache)
         print(f"[SCRAPER-CACHE] {count} itens novos adicionados ao cache de scrapers.")
 
-
 async def prepopulate_scraper_cache_from_popular():
     for content_type in ("movie", "series"):
         cache_file = os.path.join(CACHE_DIR, f"tmdb_popular_{content_type}.json")
@@ -167,13 +148,13 @@ async def lifespan(app: FastAPI):
     _http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(15.0, connect=5.0),
         follow_redirects=True,
-        limits=httpx.Limits(max_connections=100, max_keepalive_connections=30, keepalive_expiry=30),
+        limits=httpx.Limits(max_connections=200, max_keepalive_connections=30, keepalive_expiry=30),
         verify=False,
     )
     _serve_client = httpx.AsyncClient(
         timeout=httpx.Timeout(10.0, connect=5.0),
         follow_redirects=True,
-        limits=httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=30),
+        limits=httpx.Limits(max_connections=40, max_keepalive_connections=10, keepalive_expiry=30),
         verify=False,
     )
 
@@ -189,9 +170,6 @@ app = FastAPI(lifespan=lifespan)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-# Adiciona o middleware do contador
-app.add_middleware(CounterMiddleware)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -203,55 +181,6 @@ app.add_middleware(
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-
-@app.get("/contador")
-async def ver_contador():
-    """Rota para ver os status do servidor (Somente para você!)"""
-    agora = time.time()
-
-    # Conta usuários em diferentes janelas de tempo
-    usuarios_5_min = len([t for t in _active_ips.values() if agora - t < 300])
-    usuarios_1_hora = len([t for t in _active_ips.values() if agora - t < 3600])
-
-    # Limpa do dicionário IPs que não acessam o servidor há mais de 1 hora (3600 segundos)
-    ips_validos = {ip: t for ip, t in _active_ips.items() if agora - t < 3600}
-    _active_ips.clear()
-    _active_ips.update(ips_validos)
-
-    # Função auxiliar para calcular o tempo restante dos arquivos
-    def calcular_restante(caminho_arquivo, limite_segundos):
-        if not os.path.exists(caminho_arquivo):
-            return "Arquivo ainda não foi criado."
-
-        idade_segundos = agora - os.path.getmtime(caminho_arquivo)
-        restante = limite_segundos - idade_segundos
-
-        if restante <= 0:
-            return "Expirou! (Será apagado/atualizado no próximo acesso)"
-
-        horas = int(restante // 3600)
-        minutos = int((restante % 3600) // 60)
-        return f"{horas}h e {minutos}m restantes"
-
-    # Calcula os caminhos dos arquivos
-    catalogo_recente = os.path.join(CACHE_DIR, "server_recent_catalog.json")
-    popular_movie = os.path.join(CACHE_DIR, "tmdb_popular_movie.json")
-    popular_series = os.path.join(CACHE_DIR, "tmdb_popular_series.json")
-
-    return JSONResponse(content={
-        "status_usuarios": {
-            "ativos_ultimos_5_minutos": usuarios_5_min,
-            "ativos_ultima_hora": usuarios_1_hora,
-            "total_requisicoes_desde_o_inicio": _total_requests
-        },
-        "status_caches": {
-            "catalogo_recente_E_scrapers_status (Vinculados - 6h limite)": calcular_restante(catalogo_recente, CATALOG_CACHE_TIME),
-            "popular_movies (24h limite)": calcular_restante(popular_movie, POPULAR_CACHE_TIME),
-            "popular_series (24h limite)": calcular_restante(popular_series, POPULAR_CACHE_TIME)
-        }
-    })
-
 
 async def obter_dados_base_tmdb(imdb_id: str, content_type: str, client: httpx.AsyncClient = None):
     tmdb_id_final = None
@@ -407,15 +336,12 @@ async def get_recent_catalog_cached(content_type):
         except:
             pass
 
-    # Se chegou aqui, o catálogo expirou e está sendo refeito (passou de 6h)
     catalogs = await build_recent_catalog()
     if catalogs.get("movie") or catalogs.get("series"):
         try:
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(catalogs, f, ensure_ascii=False, indent=2)
 
-            # --- SUA IDEIA APLICADA AQUI ---
-            # O catálogo recente recriou? Aproveita o gancho e zera os scrapers também!
             if os.path.exists(SCRAPER_STATUS_FILE):
                 os.remove(SCRAPER_STATUS_FILE)
                 print("[CACHE] Catálogo de 6h atualizado! SCRAPER_STATUS_FILE deletado junto.")
@@ -598,7 +524,8 @@ async def stream(type: str, id: str, request: Request):
             else:
                 outras_tarefas["streamflix"] = asyncio.create_task(streamflix.search_serve(titles, type, season, episode, client=_http_client))
     else:
-        print(f"[APP] tmdb_id não resolvido para '{clean_id}' — scrapers ignorados.")
+        print(f"[APP] tmdb_id não resolvido para '{clean_id}' — demais scrapers ignorados.")
+
 
     tarefas_para_aguardar = [tarefa_serve] + list(outras_tarefas.values())
     names   = ["serve"] + list(outras_tarefas.keys())

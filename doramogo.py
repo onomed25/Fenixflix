@@ -69,24 +69,6 @@ async def search_serve(tmdb_id, titles, media_type, season, episode, client: htt
     season_padded = f"{target_season:02d}"
     timestamp = int(time.time() * 1000)
 
-    if not titles:
-        print("[DEBUG - Doramogo] Nenhum título fornecido pelo app.py, pesquisa cancelada.")
-        return []
-
-    todas_variacoes = []
-
-    if slug_cached:
-        print(f"[DEBUG - Doramogo] Slug em cache encontrado, a testar primeiro: '{slug_cached}'")
-        todas_variacoes.append(slug_cached)
-
-    for title in titles:
-        todas_variacoes.extend(generate_slug_variations(title, target_season))
-
-    slug_variations = list(dict.fromkeys(todas_variacoes))
-    print(f"[DEBUG - Doramogo] Total de variações de slug geradas: {len(slug_variations)}")
-
-    streams = []
-
     async def test_and_return(slug):
         first_letter = slug[0].upper() if slug else 'T'
 
@@ -100,7 +82,7 @@ async def search_serve(tmdb_id, titles, media_type, season, episode, client: htt
             return {
                 "url": stream_url,
                 "name": 'FenixFlix\n1080p',
-                "title": titles[0] if media_type == 'movie' else f"Dublado\ndoramogo",
+                "title": titles[0] if titles and media_type == 'movie' else f"Dublado\ndoramogo",
                 "type": "hls",
                 "_slug_found": slug,
                 "behaviorHints": {
@@ -117,6 +99,36 @@ async def search_serve(tmdb_id, titles, media_type, season, episode, client: htt
             }
         return None
 
+    # 1. TESTAR O CACHE SOZINHO PRIMEIRO
+    if slug_cached:
+        print(f"[DEBUG - Doramogo] Slug em cache encontrado, a testar SOZINHO primeiro: '{slug_cached}'")
+        resultado_cache = await test_and_return(slug_cached)
+
+        if resultado_cache:
+            print("[DEBUG - Doramogo] Sucesso no cache! Poupando requisições.")
+            return [resultado_cache] # Retorna direto, nem gera as outras tarefas!
+        else:
+            print("[DEBUG - Doramogo] Slug do cache falhou. Partindo para a busca completa.")
+
+    # 2. SE NÃO TINHA CACHE OU ELE FALHOU, GERA AS VARIAÇÕES
+    if not titles:
+        print("[DEBUG - Doramogo] Nenhum título fornecido pelo app.py, pesquisa cancelada.")
+        return []
+
+    todas_variacoes = []
+    for title in titles:
+        todas_variacoes.extend(generate_slug_variations(title, target_season))
+
+    # Remove duplicatas e tira o slug_cached que já testamos e sabemos que falhou
+    slug_variations = []
+    for s in dict.fromkeys(todas_variacoes):
+        if s != slug_cached:
+            slug_variations.append(s)
+
+    print(f"[DEBUG - Doramogo] Total de variações de slug geradas para testar: {len(slug_variations)}")
+
+    # 3. TESTAR O RESTO
+    streams = []
     tasks = [asyncio.create_task(test_and_return(slug)) for slug in slug_variations]
 
     for task_result in asyncio.as_completed(tasks):
@@ -125,10 +137,10 @@ async def search_serve(tmdb_id, titles, media_type, season, episode, client: htt
             if resultado:
                 streams.append(resultado)
 
+                # Cancela as outras tarefas ativas imediatamente para não deixar "portas abertas"
                 for t in tasks:
                     if not t.done():
                         t.cancel()
-
                 break
         except Exception as e:
             print(f"[DEBUG - Doramogo] Erro ao aguardar tarefa: {e}")
@@ -142,5 +154,6 @@ if __name__ == "__main__":
     async def testar_doramogo():
         async with httpx.AsyncClient(verify=False) as client:
             resultados = await search_serve("93405", ["Squid Game", "Round 6"], "series", 1, 1, client)
+            print(resultados)
 
     asyncio.run(testar_doramogo())
