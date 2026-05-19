@@ -1,17 +1,21 @@
 import httpx
 import logging
 import random
+import os 
+from dotenv import load_dotenv
 
+
+load_dotenv()
 logger = logging.getLogger(__name__)
 
+SERVE_ = os.getenv("serve")
+
 TAPECONTENT_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Referer": "http://87.106.82.84:14923/",
-    "Origin": "http://87.106.82.84:14923"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
 
 async def search_serve(imdb_id, content_type, season=None, episode=None, client: httpx.AsyncClient = None):
-    url = f"http://87.106.82.84:14923/{imdb_id}"
+    url = f"{SERVE_}/{imdb_id}"
 
     async def _fetch(c):
         response = await c.get(url)

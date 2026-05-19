@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 import serve
 import streamflix
-import doramogo
+#import doramogo
 import mywallpaper
 import on
 
@@ -29,6 +29,7 @@ CATALOG_CACHE_TIME = 6 * 60 * 60
 POPULAR_CACHE_TIME = 24 * 60 * 60
 SCRAPER_STATUS_FILE = os.path.join(CACHE_DIR, "scrapers_status.json")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+SERVE_ = os.getenv("serve")
 
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
@@ -285,7 +286,7 @@ async def fetch_tmdb_meta_ptbr(item_id: str, content_type: str):
 
 
 async def build_recent_catalog():
-    url = "http://87.106.82.84:14923/api/all"
+    url = f"{SERVE_}/api/all"
     try:
         resp = await _http_client.get(url, timeout=30.0)
         all_data = resp.json() if resp.status_code == 200 else []
@@ -484,9 +485,6 @@ async def stream(type: str, id: str, request: Request):
             scraper_flags = entry.get("episodes", {}).get(f"{season}:{episode}", {})
             if isinstance(scraper_flags, dict) and "flags" in scraper_flags:
                 scraper_flags = scraper_flags["flags"]
-            if "doramogo_slug" not in scraper_flags and entry.get("doramogo_slug"):
-                scraper_flags = dict(scraper_flags)
-                scraper_flags["doramogo_slug"] = entry["doramogo_slug"]
         else:
             scraper_flags = entry.get("scrapers", {})
 
@@ -507,11 +505,10 @@ async def stream(type: str, id: str, request: Request):
     cached_streamflix_urls = []
 
     if tmdb_id:
-        if scraper_flags.get("doramogo") != "N":
-            doramogo_slug_cached = scraper_flags.get("doramogo_slug") or None
-            outras_tarefas["doramogo"] = asyncio.create_task(doramogo.search_serve(tmdb_id, titles, type, season, episode, client=_http_client, slug_cached=doramogo_slug_cached))
         if scraper_flags.get("on") != "N":
-            outras_tarefas["on"] = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client))
+            on_cache = scraper_flags.get("on") if isinstance(scraper_flags.get("on"), dict) else {}
+            outras_tarefas["on"] = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache))
+        
         if scraper_flags.get("mywallpaper") != "N":
             outras_tarefas["mywallpaper"] = asyncio.create_task(mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
 
@@ -547,17 +544,23 @@ async def stream(type: str, id: str, request: Request):
                 novos_flags[nome] = urls[0] if len(urls) == 1 else urls
             else:
                 novos_flags[nome] = "N"
-        elif nome == "doramogo":
-            novos_flags[nome] = "S"
-            slug_encontrado = next((s.get("_slug_found") for s in res if s.get("_slug_found")), None)
-            if slug_encontrado:
-                novos_flags["_doramogo_slug_novo"] = slug_encontrado
+        elif nome == "on":
+            on_dict = {}
+            for s in res:
+                if isinstance(s, dict) and s.get("_mediafire_url") and s.get("_label"):
+                    on_dict[s["_label"]] = s["_mediafire_url"]
+            if on_dict:
+                novos_flags[nome] = on_dict
+            else:
+                novos_flags[nome] = "S"
         elif nome != "serve":
             novos_flags[nome] = "S"
 
         for s_info in res:
             if s_info.get("url"):
                 s_info.pop("_slug_found", None)
+                s_info.pop("_mediafire_url", None)
+                s_info.pop("_label", None)
                 if "behaviorHints" not in s_info:
                     s_info["behaviorHints"] = {"notWebReady": False, "bingeGroup": "fenixflix"}
                 todos_streams.append(s_info)
