@@ -544,23 +544,31 @@ async def stream(type: str, id: str, request: Request):
                 novos_flags[nome] = urls[0] if len(urls) == 1 else urls
             else:
                 novos_flags[nome] = "N"
+        
         elif nome == "on":
             on_dict = {}
             for s in res:
-                if isinstance(s, dict) and s.get("_mediafire_url") and s.get("_label"):
-                    on_dict[s["_label"]] = s["_mediafire_url"]
+                # Usando _cache_key ("D" ou "L") em vez do _label ("Dublado" ou "Legendado")
+                if isinstance(s, dict) and s.get("_mediafire_url") and s.get("_cache_key"):
+                    on_dict[s["_cache_key"]] = s["_mediafire_url"]
+            
             if on_dict:
                 novos_flags[nome] = on_dict
             else:
                 novos_flags[nome] = "S"
+        
         elif nome != "serve":
             novos_flags[nome] = "S"
 
         for s_info in res:
+            # Só adiciona na lista se tiver a URL do vídeo real
             if s_info.get("url"):
+                # Limpando as chaves ocultas para não mandar lixo pro Stremio
                 s_info.pop("_slug_found", None)
                 s_info.pop("_mediafire_url", None)
                 s_info.pop("_label", None)
+                s_info.pop("_cache_key", None) # Nova chave oculta removida aqui
+                
                 if "behaviorHints" not in s_info:
                     s_info["behaviorHints"] = {"notWebReady": False, "bingeGroup": "fenixflix"}
                 todos_streams.append(s_info)
