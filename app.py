@@ -12,6 +12,7 @@ import time
 import json
 import uvicorn
 import aiofiles
+import re  # Adicionado para a extração dos códigos do Mediafire
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
@@ -503,23 +504,46 @@ async def stream(type: str, id: str, request: Request):
 
     outras_tarefas = {}
     cached_streamflix_urls = []
+    novos_flags = scraper_flags.copy()
 
     if tmdb_id:
-        if scraper_flags.get("on") != "N":
-            on_cache = scraper_flags.get("on") if isinstance(scraper_flags.get("on"), dict) else {}
+        on_flag = scraper_flags.get("on")
+        
+        # INTELLIGENT CACHE: Verifica se o episódio já falhou totalmente antes no Azullog
+        azullog_falhou_total = isinstance(on_flag, dict) and on_flag.get("D") == "N" and on_flag.get("L") == "N"
+        
+        if on_flag == "N" or azullog_falhou_total:
+            print(f"[APP] Azullog ignorado: Episódio já marcado como inexistente no cache ('N' para Dub e Leg).")
+            novos_flags["on"] = on_flag
+        else:
+            # DESCOMPACTAÇÃO: Reconstrói as URLs completas do Mediafire a partir do código do JSON antes de mandar pro on.py
+            on_cache = {}
+            if isinstance(on_flag, dict):
+                for k, v in on_flag.items():
+                    if isinstance(v, str) and not v.startswith("http") and v != "N" and v != "S":
+                        on_cache[k] = f"https://www.mediafire.com/file_premium/{v}/file"
+                    else:
+                        on_cache[k] = v
             outras_tarefas["on"] = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache))
         
         if scraper_flags.get("mywallpaper") != "N":
             outras_tarefas["mywallpaper"] = asyncio.create_task(mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
 
         sflix_flag = scraper_flags.get("streamflix")
-        if sflix_flag != "N":
+        sf_id_salvo = cache_status.get(base_id, {}).get("streamflix_series_id")
+        
+        if sf_id_salvo == "N":
+            print(f"[APP] Streamflix ignorado: Série marcada como inexistente ('N') no cache raiz.")
+            novos_flags["streamflix"] = "N"
+        elif sflix_flag != "N":
             if isinstance(sflix_flag, str) and sflix_flag.startswith("http"):
                 cached_streamflix_urls = [sflix_flag]
             elif isinstance(sflix_flag, list):
                 cached_streamflix_urls = sflix_flag
             else:
-                outras_tarefas["streamflix"] = asyncio.create_task(streamflix.search_serve(titles, type, season, episode, client=_http_client))
+                outras_tarefas["streamflix"] = asyncio.create_task(
+                    streamflix.search_serve(titles, type, season, episode, client=_http_client, cached_series_id=sf_id_salvo)
+                )
     else:
         print(f"[APP] tmdb_id não resolvido para '{clean_id}' — demais scrapers ignorados.")
 
@@ -529,7 +553,6 @@ async def stream(type: str, id: str, request: Request):
     results = await asyncio.gather(*tarefas_para_aguardar, return_exceptions=True)
 
     todos_streams = []
-    novos_flags   = scraper_flags.copy()
 
     for i, res in enumerate(results):
         nome = names[i]
@@ -538,8 +561,13 @@ async def stream(type: str, id: str, request: Request):
                 novos_flags[nome] = "N"
             continue
 
+        if nome == "streamflix" and isinstance(res, list):
+            for s in res:
+                if isinstance(s, dict) and "_streamflix_series_id" in s:
+                    novos_flags["_streamflix_series_id"] = s["_streamflix_series_id"]
+
         if nome == "streamflix":
-            urls = [s.get("url") for s in res if s.get("url")]
+            urls = [s.get("url") for s in res if isinstance(s, dict) and s.get("url")]
             if urls:
                 novos_flags[nome] = urls[0] if len(urls) == 1 else urls
             else:
@@ -548,9 +576,15 @@ async def stream(type: str, id: str, request: Request):
         elif nome == "on":
             on_dict = {}
             for s in res:
-                # Usando _cache_key ("D" ou "L") em vez do _label ("Dublado" ou "Legendado")
                 if isinstance(s, dict) and s.get("_mediafire_url") and s.get("_cache_key"):
-                    on_dict[s["_cache_key"]] = s["_mediafire_url"]
+                    url_completa = s["_mediafire_url"]
+                    
+                    # COMPACTAÇÃO: Extrai cirurgicamente apenas o código de 15 caracteres do Mediafire para encolher o JSON
+                    match = re.search(r'mediafire\.com/(?:file_premium|file)/([a-zA-Z0-9]+)', url_completa)
+                    if match:
+                        on_dict[s["_cache_key"]] = match.group(1)
+                    else:
+                        on_dict[s["_cache_key"]] = url_completa
             
             if on_dict:
                 novos_flags[nome] = on_dict
@@ -561,13 +595,12 @@ async def stream(type: str, id: str, request: Request):
             novos_flags[nome] = "S"
 
         for s_info in res:
-            # Só adiciona na lista se tiver a URL do vídeo real
-            if s_info.get("url"):
-                # Limpando as chaves ocultas para não mandar lixo pro Stremio
+            if isinstance(s_info, dict) and s_info.get("url"):
                 s_info.pop("_slug_found", None)
                 s_info.pop("_mediafire_url", None)
                 s_info.pop("_label", None)
-                s_info.pop("_cache_key", None) # Nova chave oculta removida aqui
+                s_info.pop("_cache_key", None)
+                s_info.pop("_streamflix_series_id", None)
                 
                 if "behaviorHints" not in s_info:
                     s_info["behaviorHints"] = {"notWebReady": False, "bingeGroup": "fenixflix"}
@@ -584,25 +617,40 @@ async def stream(type: str, id: str, request: Request):
     if base_id not in cache_status:
         cache_status[base_id] = {"tmdb_id": tmdb_id, "titles": titles, "type": type}
 
+    episodes_backup = cache_status[base_id].pop("episodes", None)
+    scrapers_backup = cache_status[base_id].pop("scrapers", None)
+
     slug_novo = novos_flags.pop("_doramogo_slug_novo", None)
     if slug_novo:
         cache_status[base_id]["doramogo_slug"] = slug_novo
         print(f"[APP] doramogo_slug salvo no raiz: '{slug_novo}'")
 
+    # EVITA DUPLICADOS: Só salva e printa na raiz se o id_novo for DIFERENTE do id_atual
+    sf_id_novo = novos_flags.pop("_streamflix_series_id", None)
+    id_atual = cache_status.get(base_id, {}).get("streamflix_series_id")
+    if sf_id_novo and sf_id_novo != id_atual:
+        cache_status[base_id]["streamflix_series_id"] = sf_id_novo
+        print(f"[APP] streamflix_series_id salvo no raiz: '{sf_id_novo}'")
+    elif sf_id_novo:
+        cache_status[base_id]["streamflix_series_id"] = sf_id_novo
+
     if tmdb_id and type == "series":
-        if "episodes" not in cache_status[base_id]:
-            cache_status[base_id]["episodes"] = {}
+        if episodes_backup is None:
+            episodes_backup = {}
         flags_para_salvar = {k: v for k, v in novos_flags.items() if k != "doramogo_slug"}
-        cache_status[base_id]["episodes"][f"{season}:{episode}"] = flags_para_salvar
+        episodes_backup[f"{season}:{episode}"] = flags_para_salvar
+        cache_status[base_id]["episodes"] = episodes_backup
     elif tmdb_id:
-        cache_status[base_id]["scrapers"] = novos_flags
+        if scrapers_backup is None:
+            scrapers_backup = {}
+        scrapers_backup.update(novos_flags)
+        cache_status[base_id]["scrapers"] = scrapers_backup
 
     if "streams_data" in cache_status[base_id]:
         del cache_status[base_id]["streams_data"]
 
     await save_scraper_cache(cache_status)
     return JSONResponse(content={"streams": todos_streams})
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -5,6 +5,7 @@ import time
 import unicodedata
 
 BASE_URL = "https://streamflix.live"
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
     "Referer": "https://streamflix.live/"
@@ -14,8 +15,9 @@ cache_vod = {"data": None, "time": 0}
 cache_series = {"data": None, "time": 0}
 CACHE_TTL = 3600
 
+known_series_ids = {}
+
 def clean_title(title):
-    """Limpa o título para uma comparação EXATA e rigorosa, evitando filmes errados."""
     cleaned = str(title).lower().strip()
     cleaned = re.sub(r'\[.*?\]|\(.*?\)', ' ', cleaned)
     cleaned = unicodedata.normalize('NFKD', cleaned).encode('ASCII', 'ignore').decode('utf-8')
@@ -59,10 +61,7 @@ async def get_all_series(client):
         print(f"[StreamFlix Debug] Erro ao buscar séries: {e}")
     return []
 
-async def search_serve(titles_to_search, content_type, season=None, episode=None, client: httpx.AsyncClient = None):
-    """
-    Aceita um cliente httpx partilhado (pool de conexões) ou cria o seu próprio.
-    """
+async def search_serve(titles_to_search, content_type, season=None, episode=None, client: httpx.AsyncClient = None, cached_series_id=None):
     streams = []
     if not titles_to_search:
         return streams
@@ -85,28 +84,43 @@ async def search_serve(titles_to_search, content_type, season=None, episode=None
                         break
 
                 if item_id:
-                    stream_url_req = f"{BASE_URL}/api_proxy.php?action=get_stream_url&type=movie&id={item_id}"
-                    s_resp = await c.get(stream_url_req, headers=HEADERS)
-                    s_data = s_resp.json()
-                    if "stream_url" in s_data:
-                        streams.append({
-                            "name": "FenixFlix",
-                            "title": "Dublado\nStream",
-                            "url": s_data["stream_url"],
-                            "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-streamflix"}
-                        })
+                    direct_url = f"{BASE_URL}/api_proxy.php?action=stream&type=movie&id={item_id}"
+                    streams.append({
+                        "name": "FenixFlix",
+                        "title": "Dublado\nStream",
+                        "url": direct_url,
+                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-streamflix"}
+                    })
+                    print(f"[StreamFlix Debug] URL enviada ao Stremio (Filme): {direct_url}")
 
             elif content_type == "series" and season is not None and episode is not None:
-                series_list = await get_all_series(c)
-                for s in series_list:
-                    raw_name = s.get("name", "")
-                    c_name = clean_title(raw_name)
-                    if any(t == c_name for t in clean_search_titles):
-                        item_id = s.get("series_id")
-                        print(f"[StreamFlix Debug] MATCH EXATO DE SÉRIE! '{raw_name}' -> ID: {item_id}")
-                        break
+                if cached_series_id:
+                    item_id = cached_series_id
+                    print(f"[StreamFlix Debug] Usando ID DIRETO do JSON: {item_id}")
+                else:
+                    for t in clean_search_titles:
+                        if t in known_series_ids:
+                            item_id = known_series_ids[t]
+                            print(f"[StreamFlix Debug] Usando ID da série salvo na base de memória: {item_id}")
+                            break
 
+                    if not item_id:
+                        series_list = await get_all_series(c)
+                        for s in series_list:
+                            raw_name = s.get("name", "")
+                            c_name = clean_title(raw_name)
+                            if any(t == c_name for t in clean_search_titles):
+                                item_id = s.get("series_id")
+                                print(f"[StreamFlix Debug] MATCH EXATO DE SÉRIE! '{raw_name}' -> ID: {item_id}")
+                                
+                                for t_save in clean_search_titles:
+                                    known_series_ids[t_save] = item_id
+                                break
+
+                # Verifica se a série foi encontrada ou não
                 if item_id:
+                    streams.append({"_streamflix_series_id": item_id})
+                    
                     info_url = f"{BASE_URL}/api_proxy.php?action=get_series_info&series_id={item_id}"
                     i_resp = await c.get(info_url, headers=HEADERS)
                     i_data = i_resp.json()
@@ -123,16 +137,22 @@ async def search_serve(titles_to_search, content_type, season=None, episode=None
                                 break
 
                         if ep_id:
-                            stream_url_req = f"{BASE_URL}/api_proxy.php?action=get_stream_url&type=series&id={ep_id}"
-                            s_resp = await c.get(stream_url_req, headers=HEADERS)
-                            s_data = s_resp.json()
-                            if "stream_url" in s_data:
-                                streams.append({
-                                    "name": "FenixFlix",
-                                    "title": "Dublado\nStream",
-                                    "url": s_data["stream_url"],
-                                    "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-streamflix"}
-                                })
+                            direct_url = f"{BASE_URL}/api_proxy.php?action=stream&type=series&id={ep_id}"
+                            streams.append({
+                                "name": "FenixFlix",
+                                "title": "Dublado\nStream",
+                                "url": direct_url,
+                                "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-streamflix"},
+                                "_streamflix_series_id": item_id  
+                            })
+                            print(f"[StreamFlix Debug] URL enviada ao Stremio (Série): {direct_url}")
+                    else:
+                        print(f"[StreamFlix Debug] Temporada {season} não encontrada para a série ID {item_id}")
+                else:
+                    # NOVO: Cache negativo! Avisa o app.py que essa série NÃO EXISTE no site
+                    print(f"[StreamFlix Debug] Série não encontrada no site. Retornando flag 'N' para o raiz.")
+                    streams.append({"_streamflix_series_id": "N"})
+
         except Exception as e:
             print(f"[StreamFlix Debug] Erro global: {e}")
 
