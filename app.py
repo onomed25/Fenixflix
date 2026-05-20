@@ -512,6 +512,9 @@ async def stream(type: str, id: str, request: Request):
         # INTELLIGENT CACHE: Verifica se o episódio já falhou totalmente antes no Azullog
         azullog_falhou_total = isinstance(on_flag, dict) and on_flag.get("D") == "N" and on_flag.get("L") == "N"
         
+        # INTELLIGENT CACHE: Verifica se ambas as chaves já têm resposta no cache (URL ou "N") — evita scraping desnecessário
+        on_ja_completo = isinstance(on_flag, dict) and "D" in on_flag and "L" in on_flag
+        
         if on_flag == "N" or azullog_falhou_total:
             print(f"[APP] Azullog ignorado: Episódio já marcado como inexistente no cache ('N' para Dub e Leg).")
             novos_flags["on"] = on_flag
@@ -524,6 +527,10 @@ async def stream(type: str, id: str, request: Request):
                         on_cache[k] = f"https://www.mediafire.com/file_premium/{v}/file"
                     else:
                         on_cache[k] = v
+            
+            if on_ja_completo:
+                print(f"[APP] Azullog: D e L já no cache — pulando scraping pesado, apenas buscando link fresco do Mediafire.")
+            
             outras_tarefas["on"] = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache))
         
         if scraper_flags.get("mywallpaper") != "N":
@@ -576,20 +583,18 @@ async def stream(type: str, id: str, request: Request):
         elif nome == "on":
             on_dict = {}
             for s in res:
-                if isinstance(s, dict) and s.get("_mediafire_url") and s.get("_cache_key"):
-                    url_completa = s["_mediafire_url"]
+                if isinstance(s, dict) and s.get("_cache_key"):
+                    url_completa = s.get("_mediafire_url", "N")
                     
-                    # COMPACTAÇÃO: Extrai cirurgicamente apenas o código de 15 caracteres do Mediafire para encolher o JSON
-                    match = re.search(r'mediafire\.com/(?:file_premium|file)/([a-zA-Z0-9]+)', url_completa)
-                    if match:
-                        on_dict[s["_cache_key"]] = match.group(1)
+                    if url_completa == "N":
+                        # PERSISTE O "N" POR CHAVE: evita re-buscar D ou L que já sabemos que não existe
+                        on_dict[s["_cache_key"]] = "N"
                     else:
-                        on_dict[s["_cache_key"]] = url_completa
+                        # COMPACTAÇÃO: Extrai cirurgicamente apenas o código de 15 caracteres do Mediafire para encolher o JSON
+                        match = re.search(r'mediafire\.com/(?:file_premium|file)/([a-zA-Z0-9]+)', url_completa)
+                        on_dict[s["_cache_key"]] = match.group(1) if match else url_completa
             
-            if on_dict:
-                novos_flags[nome] = on_dict
-            else:
-                novos_flags[nome] = "S"
+            novos_flags[nome] = on_dict if on_dict else "S"
         
         elif nome != "serve":
             novos_flags[nome] = "S"
