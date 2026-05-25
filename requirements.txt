@@ -10,3 +10,4 @@ beautifulsoup4
 pycryptodome
 lxml
 aiofiles
+orjson
