@@ -6,33 +6,53 @@ import asyncio
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
 
+# --- FUNÇÕES AJUDANTES (Rodarão em Threads separadas) ---
+
+def parse_iframe(html_text):
+    """Lê o HTML do site 1take e encontra o iframe do player."""
+    soup = BeautifulSoup(html_text, 'lxml')
+    iframe = soup.select_one("iframe[src*='player_2.php']")
+    if iframe:
+        url = iframe.get("src")
+        if url.startswith("//"):
+            return "https:" + url
+        return url
+    return None
+
+def parse_mediafire_btn(html_text):
+    """Lê o HTML do Mediafire e encontra o botão final de download (MP4)."""
+    soup = BeautifulSoup(html_text, 'lxml')
+    btn = soup.select_one("a#downloadButton")
+    if btn:
+        return btn.get("href")
+    return None
+
+# --------------------------------------------------------
+
 async def extrair_link(label, cache_key, target_url, client, cached_mediafire_url=None):
     mediafire_url = cached_mediafire_url
 
-    # 1. Se o cache disser "N", significa que já sabemos que não existe. PULA TUDO!
+    # 1. Se o cache disser "N", pula tudo!
     if mediafire_url == "N":
         print(f"[Azullog Debug] ⏭️ Cache negativo ('N') encontrado para {label} ({cache_key}). Pulando busca pesada!")
-        return {"_cache_key": cache_key, "_label": label, "_mediafire_url": "N"} # Retorna 'N' e a letra 'D' ou 'L' pro app.py
+        return {"_cache_key": cache_key, "_label": label, "_mediafire_url": "N"}
 
     # 2. Se tem um link real do Mediafire no cache, usa ele
     elif mediafire_url:
         print(f"[Azullog Debug] ⚡ Usando cache do scrapers_status.json pro Mediafire {label} ({cache_key}): {mediafire_url}")
-    
-    # 3. Se não tem nada no cache, faz o scraping pesado do player
+
+    # 3. Se não tem nada no cache, faz o scraping
     else:
         try:
             print(f"[Azullog Debug] 🔍 Testando link direto: {target_url}")
             res = await client.get(target_url, headers={"User-Agent": USER_AGENT, "accept": "*/*"})
 
             if res.status_code == 200:
-                soup = BeautifulSoup(res.text, 'lxml')
-                iframe = soup.select_one("iframe[src*='player_2.php']")
+                # MÁGICA AQUI: O parse pesado do BeautifulSoup vai para uma Thread separada!
+                # O FastAPI fica livre para processar outros usuários enquanto isso acontece.
+                player_url = await asyncio.to_thread(parse_iframe, res.text)
 
-                if iframe:
-                    player_url = iframe.get("src")
-                    if player_url.startswith("//"):
-                        player_url = "https:" + player_url
-
+                if player_url:
                     print(f"[Azullog Debug] Resolvendo player ({label}): {player_url}")
                     res2 = await client.get(player_url, headers={"referer": target_url, "User-Agent": USER_AGENT})
 
@@ -47,7 +67,7 @@ async def extrair_link(label, cache_key, target_url, client, cached_mediafire_ur
         except Exception as e:
             print(f"[Azullog Debug] Erro durante a extração de {label}: {e}")
 
-    # 4. Aborta se não conseguiu a URL base (Marca como "N" pro cache)
+    # 4. Aborta se não conseguiu a URL base
     if not mediafire_url:
         print(f"[Azullog Debug] ❌ Falha ao obter link base para {label}. Marcando cache como 'N'.")
         return {"_cache_key": cache_key, "_label": label, "_mediafire_url": "N"}
@@ -55,26 +75,25 @@ async def extrair_link(label, cache_key, target_url, client, cached_mediafire_ur
     # 5. Tendo o link base, entra no Mediafire e pega o botão MP4 fresco
     try:
         mf_res = await client.get(mediafire_url, headers={"User-Agent": USER_AGENT})
-        mf_soup = BeautifulSoup(mf_res.text, 'lxml')
-        download_btn = mf_soup.select_one("a#downloadButton")
 
-        if download_btn:
-            final_mp4 = download_btn.get("href")
+        # MÁGICA AQUI: O parse do Mediafire também vai para uma Thread separada!
+        final_mp4 = await asyncio.to_thread(parse_mediafire_btn, mf_res.text)
+
+        if final_mp4:
             print(f"[Azullog Debug] ✅ Sucesso ({label})! Link final MP4 fresco extraído.")
-
             return {
                 "name": "FenixFlix",
-                "description": f"{label}\nON",  # O usuário continua vendo "Dublado/Legendado" no app
+                "description": f"{label}\nON",
                 "url": final_mp4,
                 "behaviorHints": {"notWebReady": False, "bingeGroup": f"fenixflix-azullog-{label.lower()}"},
                 "_mediafire_url": mediafire_url,
-                "_cache_key": cache_key, # "D" ou "L" -> use isso no app.py para salvar no JSON
+                "_cache_key": cache_key,
                 "_label": label
             }
         else:
-            print(f"[Azullog Debug] ❌ Botão MP4 final não encontrado no Mediafire ({label}). Arquivo pode ter caído. Marcando como 'N'.")
+            print(f"[Azullog Debug] ❌ Botão MP4 não encontrado no Mediafire ({label}). Marcando como 'N'.")
             return {"_cache_key": cache_key, "_label": label, "_mediafire_url": "N"}
-            
+
     except Exception as e:
         print(f"[Azullog Debug] ❌ Erro ao extrair o botão MP4 para {label}: {e}. Marcando cache como 'N'.")
         return {"_cache_key": cache_key, "_label": label, "_mediafire_url": "N"}
@@ -84,14 +103,12 @@ async def extrair_link(label, cache_key, target_url, client, cached_mediafire_ur
 async def search_serve(tmdb_id: str, content_type: str, season=None, episode=None, client: httpx.AsyncClient = None, cached_links=None):
     streams = []
     urls_to_check = []
-    
-    # Agora o cached_links que chega aqui é algo como: {"D": "link...", "L": "N"}
+
     if cached_links is None:
         cached_links = {}
 
     print(f"\n[Azullog Debug] Iniciando busca para TMDB ID: {tmdb_id} | Tipo: {content_type} | S{season}E{episode}")
 
-    # Adicionamos a letra 'D' e 'L' nas tuplas para repassar pra função de extração
     if content_type == "movie":
         urls_to_check.append(("Dublado", "D", f"https://1take.lat/e/tmdb{tmdb_id}dub"))
         urls_to_check.append(("Legendado", "L", f"https://1take.lat/e/tmdb{tmdb_id}leg"))
@@ -105,7 +122,6 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
         close_client = True
 
     try:
-        # Puxa do dicionário usando a chave curta ('D' ou 'L')
         tarefas = [extrair_link(label, cache_key, target_url, client, cached_links.get(cache_key)) for label, cache_key, target_url in urls_to_check]
         resultados = await asyncio.gather(*tarefas)
 
@@ -115,9 +131,7 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
         for res in resultados:
             if res:
                 streams.append(res)
-                
-                # Verifica se deu certo mesmo (se tem 'url' e não apenas 'N')
-                if res.get("url"): 
+                if res.get("url"):
                     if res.get("_cache_key") == "D":
                         dublado_ok = True
                     elif res.get("_cache_key") == "L":
@@ -140,9 +154,7 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 
 if __name__ == "__main__":
     async def rodar_teste():
-        # Exemplo simulando que o JSON já tem "D" salvo e "L" vazio
         cache_simulado = {"D": "https://www.mediafire.com/file_premium/simulacao_filme", "L": "N"}
-        
         streams_filme = await search_serve("550", "movie", cached_links=cache_simulado)
         print("\nFilme Resultado Final:", streams_filme)
 

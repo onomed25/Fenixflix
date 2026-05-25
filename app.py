@@ -1,3 +1,8 @@
+import uvloop
+import asyncio
+# Troca o motor do asyncio antes de qualquer outra coisa
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -5,21 +10,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-import asyncio
 import httpx
 import os
 import time
-import json
+import orjson
 import uvicorn
 import aiofiles
 import re
-import orjson  # Adicionado orjson para alta performance
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 import serve
 import streamflix
-#import doramogo
 import mywallpaper
 import on
 
@@ -40,21 +42,48 @@ _http_client: httpx.AsyncClient = None
 _serve_client: httpx.AsyncClient = None
 tmdb_semaphore = asyncio.Semaphore(7)
 
+# --- SISTEMA DE CACHE GLOBAL COM LOCK E GRAVAÇÃO EM BACKGROUND ---
+GLOBAL_SCRAPER_CACHE = None
+CACHE_LOCK = asyncio.Lock()
+_CACHE_DIRTY = False
+
 def load_scraper_cache():
+    global GLOBAL_SCRAPER_CACHE
+
+    if GLOBAL_SCRAPER_CACHE is not None:
+        return GLOBAL_SCRAPER_CACHE
+
     if os.path.exists(SCRAPER_STATUS_FILE):
         try:
             with open(SCRAPER_STATUS_FILE, "rb") as f:
-                return orjson.loads(f.read())
-        except:
-            return {}
-    return {}
+                GLOBAL_SCRAPER_CACHE = orjson.loads(f.read())
+                return GLOBAL_SCRAPER_CACHE
+        except Exception as e:
+            print(f"[CACHE ERROR] Falha ao ler scrapers_status.json: {e}")
+
+    GLOBAL_SCRAPER_CACHE = {}
+    return GLOBAL_SCRAPER_CACHE
 
 async def save_scraper_cache(cache_data):
-    try:
-        async with aiofiles.open(SCRAPER_STATUS_FILE, mode="wb") as f:
-            await f.write(orjson.dumps(cache_data, option=orjson.OPT_INDENT_2))
-    except Exception as e:
-        pass
+    """Apenas atualiza a RAM e sinaliza que precisa ser salvo pelo processo em background."""
+    global GLOBAL_SCRAPER_CACHE, _CACHE_DIRTY
+    GLOBAL_SCRAPER_CACHE = cache_data
+    _CACHE_DIRTY = True
+
+async def background_cache_writer():
+    """Roda no background e salva a cada 60 segundos se houver mudanças."""
+    global _CACHE_DIRTY, GLOBAL_SCRAPER_CACHE
+    while True:
+        await asyncio.sleep(10)
+        if _CACHE_DIRTY and GLOBAL_SCRAPER_CACHE is not None:
+            async with CACHE_LOCK:
+                try:
+                    async with aiofiles.open(SCRAPER_STATUS_FILE, mode="wb") as f:
+                        await f.write(orjson.dumps(GLOBAL_SCRAPER_CACHE, option=orjson.OPT_INDENT_2))
+                    _CACHE_DIRTY = False
+                    print("[CACHE] Arquivo JSON sincronizado com sucesso no disco em background.")
+                except Exception as e:
+                    print(f"[CACHE FATAL] Erro na gravação de background: {e}")
 
 async def _resolve_popular_item(tmdb_id: str, content_type: str):
     tmdb_type = "movie" if content_type == "movie" else "tv"
@@ -105,7 +134,6 @@ async def sync_scraper_cache_from_items(items: list, content_type: str):
             novos.append(tmdb_id)
 
     if not novos:
-        print(f"[SCRAPER-CACHE] Nada de novo em '{content_type}' — cache já atualizado.")
         return
 
     print(f"[SCRAPER-CACHE] {len(novos)} itens novos em '{content_type}' — resolvendo imdb_id+titles...")
@@ -131,7 +159,6 @@ async def sync_scraper_cache_from_items(items: list, content_type: str):
 
     if count:
         await save_scraper_cache(scraper_cache)
-        print(f"[SCRAPER-CACHE] {count} itens novos adicionados ao cache de scrapers.")
 
 async def prepopulate_scraper_cache_from_popular():
     for content_type in ("movie", "series"):
@@ -161,12 +188,22 @@ async def lifespan(app: FastAPI):
         verify=False,
     )
 
+    # Inicia a task de gravação em background
+    task_writer = asyncio.create_task(background_cache_writer())
+
     await prepopulate_scraper_cache_from_popular()
 
     yield
+
+    # Encerra processos graciosamente
     await _http_client.aclose()
     await _serve_client.aclose()
+    task_writer.cancel()
 
+    # Garante a última gravação ao desligar a API
+    if _CACHE_DIRTY and GLOBAL_SCRAPER_CACHE is not None:
+        with open(SCRAPER_STATUS_FILE, "wb") as f:
+            f.write(orjson.dumps(GLOBAL_SCRAPER_CACHE, option=orjson.OPT_INDENT_2))
 
 app = FastAPI(lifespan=lifespan)
 
@@ -230,10 +267,9 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str, client: httpx.A
             async with httpx.AsyncClient(timeout=10.0, verify=False) as tmp:
                 await _do_requests(tmp)
         except Exception as e2:
-            print(f"[TMDB] Cliente temporario tambem falhou: {e2}")
+            pass
 
     return tmdb_id_final, real_imdb_id, titulos
-
 
 async def fetch_tmdb_meta_ptbr(item_id: str, content_type: str):
     async with tmdb_semaphore:
@@ -286,7 +322,6 @@ async def fetch_tmdb_meta_ptbr(item_id: str, content_type: str):
 
         return {"id": item_id, "type": true_type, "name": f"Conteúdo {item_id}"}
 
-
 async def build_recent_catalog():
     url = f"{SERVE_}/api/all"
     try:
@@ -325,7 +360,6 @@ async def build_recent_catalog():
     series = [clean(s) for s in series_raw if isinstance(s, dict) and s.get("type") == "series"][:25]
     return {"movie": movies, "series": series}
 
-
 async def get_recent_catalog_cached(content_type):
     cache_file = os.path.join(CACHE_DIR, "server_recent_catalog.json")
 
@@ -347,11 +381,9 @@ async def get_recent_catalog_cached(content_type):
 
             if os.path.exists(SCRAPER_STATUS_FILE):
                 os.remove(SCRAPER_STATUS_FILE)
-                print("[CACHE] Catálogo de 6h atualizado! SCRAPER_STATUS_FILE deletado junto.")
         except:
             pass
     return catalogs.get(content_type, [])
-
 
 async def get_popular_catalog_cached(content_type):
     cache_file = os.path.join(CACHE_DIR, f"tmdb_popular_{content_type}.json")
@@ -412,7 +444,6 @@ async def get_popular_catalog_cached(content_type):
     except:
         return []
 
-
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     manifest_data = {"name": "FENIXFLIX", "description": "Addon de Filmes e Séries", "types": ["movie", "series"]}
@@ -451,9 +482,8 @@ async def catalog_endpoint(type: str, id: str, extra: str = None, skip: int = 0)
 
     return JSONResponse(content={"metas": []})
 
-
 @app.get("/stream/{type}/{id}.json")
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 async def stream(type: str, id: str, request: Request):
     season, episode = None, None
     if id.startswith("tmdb:"):
@@ -466,6 +496,10 @@ async def stream(type: str, id: str, request: Request):
         clean_id = parts[0]
         if type == 'series' and len(parts) >= 3:
             season, episode = int(parts[1]), int(parts[2])
+
+    tarefa_serve = asyncio.create_task(
+        serve.search_serve(clean_id, type, season, episode, client=_serve_client)
+    )
 
     cache_status = load_scraper_cache()
     entry = cache_status.get(clean_id)
@@ -489,8 +523,6 @@ async def stream(type: str, id: str, request: Request):
                 scraper_flags = scraper_flags["flags"]
         else:
             scraper_flags = entry.get("scrapers", {})
-
-        print(f"[APP] Cache hit para '{base_id}' — tmdb_id={tmdb_id}")
     else:
         tmdb_id, real_imdb_id, titles = await obter_dados_base_tmdb(clean_id, type, client=_http_client)
         scraper_flags = {}
@@ -498,10 +530,6 @@ async def stream(type: str, id: str, request: Request):
             base_id = real_imdb_id
         else:
             base_id = clean_id
-
-    tarefa_serve = asyncio.create_task(
-        serve.search_serve(clean_id, type, season, episode, client=_serve_client)
-    )
 
     outras_tarefas = {}
     cached_streamflix_urls = []
@@ -511,11 +539,9 @@ async def stream(type: str, id: str, request: Request):
         on_flag = scraper_flags.get("on")
 
         azullog_falhou_total = isinstance(on_flag, dict) and on_flag.get("D") == "N" and on_flag.get("L") == "N"
-
         on_ja_completo = isinstance(on_flag, dict) and "D" in on_flag and "L" in on_flag
 
         if on_flag == "N" or azullog_falhou_total:
-            print(f"[APP] Azullog ignorado: Episódio já marcado como inexistente no cache ('N' para Dub e Leg).")
             novos_flags["on"] = on_flag
         else:
             on_cache = {}
@@ -526,16 +552,11 @@ async def stream(type: str, id: str, request: Request):
                     else:
                         on_cache[k] = v
 
-            if on_ja_completo:
-                print(f"[APP] Azullog: D e L já no cache — pulando scraping pesado, apenas buscando link fresco do Mediafire.")
-
             outras_tarefas["on"] = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache))
 
-        # --- LÓGICA DO MYWALLPAPER OTIMIZADA ---
         mw_flag_salva = cache_status.get(base_id, {}).get("mywallpaper_global")
 
         if mw_flag_salva == "N":
-            print(f"[APP] MyWallpaper ignorado: Série/Filme já marcado globalmente como inexistente ('N').")
             novos_flags["mywallpaper"] = "N"
         elif scraper_flags.get("mywallpaper") != "N":
             outras_tarefas["mywallpaper"] = asyncio.create_task(
@@ -546,7 +567,6 @@ async def stream(type: str, id: str, request: Request):
         sf_id_salvo = cache_status.get(base_id, {}).get("streamflix_series_id")
 
         if sf_id_salvo == "N":
-            print(f"[APP] Streamflix ignorado: Série marcada como inexistente ('N') no cache raiz.")
             novos_flags["streamflix"] = "N"
         elif sflix_flag != "N":
             if isinstance(sflix_flag, str) and sflix_flag.startswith("http"):
@@ -557,22 +577,32 @@ async def stream(type: str, id: str, request: Request):
                 outras_tarefas["streamflix"] = asyncio.create_task(
                     streamflix.search_serve(titles, type, season, episode, client=_http_client, cached_series_id=sf_id_salvo)
                 )
-    else:
-        print(f"[APP] tmdb_id não resolvido para '{clean_id}' — demais scrapers ignorados.")
 
-    tarefas_para_aguardar = [tarefa_serve] + list(outras_tarefas.values())
-    names   = ["serve"] + list(outras_tarefas.keys())
-    results = await asyncio.gather(*tarefas_para_aguardar, return_exceptions=True)
+    tarefas_ativas = {"serve": tarefa_serve}
+    tarefas_ativas.update(outras_tarefas)
+
+    # Espera até 12 segundos para não sofrer timeout silencioso no Stremio
+    done, pending = await asyncio.wait(
+        tarefas_ativas.values(),
+        timeout=32.0
+    )
+
+    for p in pending:
+        p.cancel()
 
     todos_streams = []
-
-    # Variável para rastrear se o mywallpaper retornou resultados nesta rodada
     mywallpaper_teve_resultados = False
 
-    for i, res in enumerate(results):
-        nome = names[i]
+    for nome, tarefa in tarefas_ativas.items():
+        if tarefa in pending:
+            continue
 
-        if isinstance(res, Exception) or not res:
+        try:
+            res = tarefa.result()
+        except Exception as e:
+            res = None
+
+        if not res:
             if nome != "serve":
                 novos_flags[nome] = "N"
             continue
@@ -585,7 +615,6 @@ async def stream(type: str, id: str, request: Request):
                 if isinstance(s, dict) and "_streamflix_series_id" in s:
                     novos_flags["_streamflix_series_id"] = s["_streamflix_series_id"]
 
-        if nome == "streamflix":
             urls = [s.get("url") for s in res if isinstance(s, dict) and s.get("url")]
             if urls:
                 novos_flags[nome] = urls[0] if len(urls) == 1 else urls
@@ -629,8 +658,11 @@ async def stream(type: str, id: str, request: Request):
             "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-streamflix"}
         })
 
+    cache_mudou = False
+
     if base_id not in cache_status:
         cache_status[base_id] = {"tmdb_id": tmdb_id, "titles": titles, "type": type}
+        cache_mudou = True
 
     episodes_backup = cache_status[base_id].pop("episodes", None)
     scrapers_backup = cache_status[base_id].pop("scrapers", None)
@@ -638,40 +670,58 @@ async def stream(type: str, id: str, request: Request):
     slug_novo = novos_flags.pop("_doramogo_slug_novo", None)
     if slug_novo:
         cache_status[base_id]["doramogo_slug"] = slug_novo
-        print(f"[APP] doramogo_slug salvo no raiz: '{slug_novo}'")
+        cache_mudou = True
 
     sf_id_novo = novos_flags.pop("_streamflix_series_id", None)
     id_atual = cache_status.get(base_id, {}).get("streamflix_series_id")
     if sf_id_novo and sf_id_novo != id_atual:
         cache_status[base_id]["streamflix_series_id"] = sf_id_novo
-        print(f"[APP] streamflix_series_id salvo no raiz: '{sf_id_novo}'")
+        cache_mudou = True
     elif sf_id_novo:
         cache_status[base_id]["streamflix_series_id"] = sf_id_novo
 
-    # --- SALVANDO A FLAG GLOBAL DO MYWALLPAPER ---
-    if "mywallpaper" in outras_tarefas:
-        if not mywallpaper_teve_resultados:
-            cache_status[base_id]["mywallpaper_global"] = "N"
-            print(f"[APP] mywallpaper_global salvo no raiz como 'N' (sem resultados).")
-        else:
-            cache_status[base_id]["mywallpaper_global"] = "S"
+    if "mywallpaper" in outras_tarefas and mywallpaper_teve_resultados is not None:
+        mw_atual = cache_status[base_id].get("mywallpaper_global")
+        if not mywallpaper_teve_resultados and "mywallpaper" not in pending:
+            if mw_atual != "N":
+                cache_status[base_id]["mywallpaper_global"] = "N"
+                cache_mudou = True
+        elif "mywallpaper" not in pending:
+            if mw_atual != "S":
+                cache_status[base_id]["mywallpaper_global"] = "S"
+                cache_mudou = True
 
     if tmdb_id and type == "series":
         if episodes_backup is None:
             episodes_backup = {}
         flags_para_salvar = {k: v for k, v in novos_flags.items() if k != "doramogo_slug"}
-        episodes_backup[f"{season}:{episode}"] = flags_para_salvar
+
+        ep_key = f"{season}:{episode}"
+        if ep_key not in episodes_backup:
+            episodes_backup[ep_key] = flags_para_salvar
+            cache_mudou = True
+        else:
+            if episodes_backup[ep_key] != flags_para_salvar:
+                episodes_backup[ep_key].update(flags_para_salvar)
+                cache_mudou = True
+
         cache_status[base_id]["episodes"] = episodes_backup
+
     elif tmdb_id:
         if scrapers_backup is None:
             scrapers_backup = {}
-        scrapers_backup.update(novos_flags)
+        if scrapers_backup != novos_flags:
+            scrapers_backup.update(novos_flags)
+            cache_mudou = True
         cache_status[base_id]["scrapers"] = scrapers_backup
 
     if "streams_data" in cache_status[base_id]:
         del cache_status[base_id]["streams_data"]
+        cache_mudou = True
 
-    await save_scraper_cache(cache_status)
+    if cache_mudou:
+        await save_scraper_cache(cache_status)
+
     return JSONResponse(content={"streams": todos_streams})
 
 if __name__ == "__main__":
