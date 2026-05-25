@@ -11,3 +11,4 @@ pycryptodome
 lxml
 aiofiles
 orjson
+uvloop
