@@ -3,6 +3,8 @@ import re
 import asyncio
 import time
 import unicodedata
+import json
+import traceback
 
 BASE_URL = "https://streamflix.live"
 
@@ -112,18 +114,27 @@ async def search_serve(titles_to_search, content_type, season=None, episode=None
                             if any(t == c_name for t in clean_search_titles):
                                 item_id = s.get("series_id")
                                 print(f"[StreamFlix Debug] MATCH EXATO DE SÉRIE! '{raw_name}' -> ID: {item_id}")
-                                
+
                                 for t_save in clean_search_titles:
                                     known_series_ids[t_save] = item_id
                                 break
 
-                # Verifica se a série foi encontrada ou não
                 if item_id:
                     streams.append({"_streamflix_series_id": item_id})
-                    
+
                     info_url = f"{BASE_URL}/api_proxy.php?action=get_series_info&series_id={item_id}"
-                    i_resp = await c.get(info_url, headers=HEADERS)
-                    i_data = i_resp.json()
+
+                    # Bloco Try-Except específico para a proteção contra o Timeout
+                    try:
+                        i_resp = await c.get(info_url, headers=HEADERS)
+                        i_resp.raise_for_status()
+                        i_data = i_resp.json()
+                    except httpx.ReadTimeout:
+                        print(f"[StreamFlix Debug] Timeout! O servidor demorou muito para responder sobre a série ID {item_id}.")
+                        return streams
+                    except Exception as ex:
+                        print(f"[StreamFlix Debug] Falha ao baixar informações dos episódios: {ex}")
+                        return streams
 
                     episodes_dict = i_data.get("episodes", {})
                     season_str = str(season)
@@ -143,23 +154,60 @@ async def search_serve(titles_to_search, content_type, season=None, episode=None
                                 "title": "Dublado\nStream",
                                 "url": direct_url,
                                 "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-streamflix"},
-                                "_streamflix_series_id": item_id  
+                                "_streamflix_series_id": item_id
                             })
                             print(f"[StreamFlix Debug] URL enviada ao Stremio (Série): {direct_url}")
                     else:
                         print(f"[StreamFlix Debug] Temporada {season} não encontrada para a série ID {item_id}")
                 else:
-                    # NOVO: Cache negativo! Avisa o app.py que essa série NÃO EXISTE no site
                     print(f"[StreamFlix Debug] Série não encontrada no site. Retornando flag 'N' para o raiz.")
                     streams.append({"_streamflix_series_id": "N"})
 
         except Exception as e:
-            print(f"[StreamFlix Debug] Erro global: {e}")
+            print(f"[StreamFlix Debug] Erro global detectado!")
+            traceback.print_exc()
 
         return streams
 
     if client is not None:
         return await _run(client)
     else:
-        async with httpx.AsyncClient(verify=False) as c:
+        # Aumentamos o timeout global para 20 segundos
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as c:
             return await _run(c)
+
+# --- BLOCO DE EXECUÇÃO ISOLADA ---
+if __name__ == "__main__":
+    async def testar_streamflix():
+        print("==================================================")
+        print("🎬 INICIANDO TESTE ISOLADO DO STREAMFLIX 🎬")
+        print("==================================================\n")
+
+        # Aumentamos o timeout também no teste local
+        async with httpx.AsyncClient(verify=False, timeout=20.0) as client:
+
+            print("👉 TESTE 1: Buscando Série ('The Last of Us', S01E03)...")
+            titulos_serie = ["the last of us", "the last of us (2023)"]
+            resultado_serie = await search_serve(
+                titles_to_search=titulos_serie,
+                content_type="series",
+                season=1,
+                episode=3,
+                client=client
+            )
+            print("\n✅ RETORNO FINAL DA SÉRIE:")
+            print(json.dumps(resultado_serie, indent=4, ensure_ascii=False))
+            print("\n--------------------------------------------------\n")
+
+            print("👉 TESTE 2: Buscando Filme ('Avatar')...")
+            titulos_filme = ["avatar", "avatar the way of water"]
+            resultado_filme = await search_serve(
+                titles_to_search=titulos_filme,
+                content_type="movie",
+                client=client
+            )
+            print("\n✅ RETORNO FINAL DO FILME:")
+            print(json.dumps(resultado_filme, indent=4, ensure_ascii=False))
+            print("\n==================================================")
+
+    asyncio.run(testar_streamflix())

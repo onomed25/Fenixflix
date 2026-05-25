@@ -12,7 +12,8 @@ import time
 import json
 import uvicorn
 import aiofiles
-import re  # Adicionado para a extração dos códigos do Mediafire
+import re
+import orjson  # Adicionado orjson para alta performance
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
@@ -42,16 +43,16 @@ tmdb_semaphore = asyncio.Semaphore(7)
 def load_scraper_cache():
     if os.path.exists(SCRAPER_STATUS_FILE):
         try:
-            with open(SCRAPER_STATUS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+            with open(SCRAPER_STATUS_FILE, "rb") as f:
+                return orjson.loads(f.read())
         except:
             return {}
     return {}
 
 async def save_scraper_cache(cache_data):
     try:
-        async with aiofiles.open(SCRAPER_STATUS_FILE, mode="w", encoding="utf-8") as f:
-            await f.write(json.dumps(cache_data, ensure_ascii=False, indent=2))
+        async with aiofiles.open(SCRAPER_STATUS_FILE, mode="wb") as f:
+            await f.write(orjson.dumps(cache_data, option=orjson.OPT_INDENT_2))
     except Exception as e:
         pass
 
@@ -138,8 +139,8 @@ async def prepopulate_scraper_cache_from_popular():
         if not os.path.exists(cache_file):
             continue
         try:
-            with open(cache_file, "r", encoding="utf-8") as f:
-                items = json.load(f)
+            with open(cache_file, "rb") as f:
+                items = orjson.loads(f.read())
             await sync_scraper_cache_from_items(items, content_type)
         except Exception as e:
             print(f"[SCRAPER-CACHE] Erro ao ler cache popular '{content_type}': {e}")
@@ -330,8 +331,8 @@ async def get_recent_catalog_cached(content_type):
 
     if os.path.exists(cache_file) and (time.time() - os.path.getmtime(cache_file)) < CATALOG_CACHE_TIME:
         try:
-            with open(cache_file, "r", encoding="utf-8") as f:
-                dados_salvos = json.load(f)
+            with open(cache_file, "rb") as f:
+                dados_salvos = orjson.loads(f.read())
                 itens_salvos = dados_salvos.get(content_type, [])
                 if itens_salvos:
                     return itens_salvos
@@ -341,8 +342,8 @@ async def get_recent_catalog_cached(content_type):
     catalogs = await build_recent_catalog()
     if catalogs.get("movie") or catalogs.get("series"):
         try:
-            with open(cache_file, "w", encoding="utf-8") as f:
-                json.dump(catalogs, f, ensure_ascii=False, indent=2)
+            with open(cache_file, "wb") as f:
+                f.write(orjson.dumps(catalogs, option=orjson.OPT_INDENT_2))
 
             if os.path.exists(SCRAPER_STATUS_FILE):
                 os.remove(SCRAPER_STATUS_FILE)
@@ -357,8 +358,8 @@ async def get_popular_catalog_cached(content_type):
 
     if os.path.exists(cache_file) and (time.time() - os.path.getmtime(cache_file)) < POPULAR_CACHE_TIME:
         try:
-            with open(cache_file, "r", encoding="utf-8") as f:
-                dados_salvos = json.load(f)
+            with open(cache_file, "rb") as f:
+                dados_salvos = orjson.loads(f.read())
                 if dados_salvos:
                     return dados_salvos
         except:
@@ -401,8 +402,8 @@ async def get_popular_catalog_cached(content_type):
 
         if metas_unicas:
             try:
-                with open(cache_file, "w", encoding="utf-8") as f:
-                    json.dump(metas_unicas, f, ensure_ascii=False, indent=2)
+                with open(cache_file, "wb") as f:
+                    f.write(orjson.dumps(metas_unicas, option=orjson.OPT_INDENT_2))
             except:
                 pass
             asyncio.create_task(sync_scraper_cache_from_items(metas_unicas, content_type))
@@ -508,18 +509,15 @@ async def stream(type: str, id: str, request: Request):
 
     if tmdb_id:
         on_flag = scraper_flags.get("on")
-        
-        # INTELLIGENT CACHE: Verifica se o episódio já falhou totalmente antes no Azullog
+
         azullog_falhou_total = isinstance(on_flag, dict) and on_flag.get("D") == "N" and on_flag.get("L") == "N"
-        
-        # INTELLIGENT CACHE: Verifica se ambas as chaves já têm resposta no cache (URL ou "N") — evita scraping desnecessário
+
         on_ja_completo = isinstance(on_flag, dict) and "D" in on_flag and "L" in on_flag
-        
+
         if on_flag == "N" or azullog_falhou_total:
             print(f"[APP] Azullog ignorado: Episódio já marcado como inexistente no cache ('N' para Dub e Leg).")
             novos_flags["on"] = on_flag
         else:
-            # DESCOMPACTAÇÃO: Reconstrói as URLs completas do Mediafire a partir do código do JSON antes de mandar pro on.py
             on_cache = {}
             if isinstance(on_flag, dict):
                 for k, v in on_flag.items():
@@ -527,18 +525,26 @@ async def stream(type: str, id: str, request: Request):
                         on_cache[k] = f"https://www.mediafire.com/file_premium/{v}/file"
                     else:
                         on_cache[k] = v
-            
+
             if on_ja_completo:
                 print(f"[APP] Azullog: D e L já no cache — pulando scraping pesado, apenas buscando link fresco do Mediafire.")
-            
+
             outras_tarefas["on"] = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache))
-        
-        if scraper_flags.get("mywallpaper") != "N":
-            outras_tarefas["mywallpaper"] = asyncio.create_task(mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client))
+
+        # --- LÓGICA DO MYWALLPAPER OTIMIZADA ---
+        mw_flag_salva = cache_status.get(base_id, {}).get("mywallpaper_global")
+
+        if mw_flag_salva == "N":
+            print(f"[APP] MyWallpaper ignorado: Série/Filme já marcado globalmente como inexistente ('N').")
+            novos_flags["mywallpaper"] = "N"
+        elif scraper_flags.get("mywallpaper") != "N":
+            outras_tarefas["mywallpaper"] = asyncio.create_task(
+                mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client)
+            )
 
         sflix_flag = scraper_flags.get("streamflix")
         sf_id_salvo = cache_status.get(base_id, {}).get("streamflix_series_id")
-        
+
         if sf_id_salvo == "N":
             print(f"[APP] Streamflix ignorado: Série marcada como inexistente ('N') no cache raiz.")
             novos_flags["streamflix"] = "N"
@@ -554,19 +560,25 @@ async def stream(type: str, id: str, request: Request):
     else:
         print(f"[APP] tmdb_id não resolvido para '{clean_id}' — demais scrapers ignorados.")
 
-
     tarefas_para_aguardar = [tarefa_serve] + list(outras_tarefas.values())
     names   = ["serve"] + list(outras_tarefas.keys())
     results = await asyncio.gather(*tarefas_para_aguardar, return_exceptions=True)
 
     todos_streams = []
 
+    # Variável para rastrear se o mywallpaper retornou resultados nesta rodada
+    mywallpaper_teve_resultados = False
+
     for i, res in enumerate(results):
         nome = names[i]
+
         if isinstance(res, Exception) or not res:
             if nome != "serve":
                 novos_flags[nome] = "N"
             continue
+
+        if nome == "mywallpaper" and isinstance(res, list) and len(res) > 0:
+            mywallpaper_teve_resultados = True
 
         if nome == "streamflix" and isinstance(res, list):
             for s in res:
@@ -579,23 +591,21 @@ async def stream(type: str, id: str, request: Request):
                 novos_flags[nome] = urls[0] if len(urls) == 1 else urls
             else:
                 novos_flags[nome] = "N"
-        
+
         elif nome == "on":
             on_dict = {}
             for s in res:
                 if isinstance(s, dict) and s.get("_cache_key"):
                     url_completa = s.get("_mediafire_url", "N")
-                    
+
                     if url_completa == "N":
-                        # PERSISTE O "N" POR CHAVE: evita re-buscar D ou L que já sabemos que não existe
                         on_dict[s["_cache_key"]] = "N"
                     else:
-                        # COMPACTAÇÃO: Extrai cirurgicamente apenas o código de 15 caracteres do Mediafire para encolher o JSON
                         match = re.search(r'mediafire\.com/(?:file_premium|file)/([a-zA-Z0-9]+)', url_completa)
                         on_dict[s["_cache_key"]] = match.group(1) if match else url_completa
-            
+
             novos_flags[nome] = on_dict if on_dict else "S"
-        
+
         elif nome != "serve":
             novos_flags[nome] = "S"
 
@@ -606,7 +616,7 @@ async def stream(type: str, id: str, request: Request):
                 s_info.pop("_label", None)
                 s_info.pop("_cache_key", None)
                 s_info.pop("_streamflix_series_id", None)
-                
+
                 if "behaviorHints" not in s_info:
                     s_info["behaviorHints"] = {"notWebReady": False, "bingeGroup": "fenixflix"}
                 todos_streams.append(s_info)
@@ -630,7 +640,6 @@ async def stream(type: str, id: str, request: Request):
         cache_status[base_id]["doramogo_slug"] = slug_novo
         print(f"[APP] doramogo_slug salvo no raiz: '{slug_novo}'")
 
-    # EVITA DUPLICADOS: Só salva e printa na raiz se o id_novo for DIFERENTE do id_atual
     sf_id_novo = novos_flags.pop("_streamflix_series_id", None)
     id_atual = cache_status.get(base_id, {}).get("streamflix_series_id")
     if sf_id_novo and sf_id_novo != id_atual:
@@ -638,6 +647,14 @@ async def stream(type: str, id: str, request: Request):
         print(f"[APP] streamflix_series_id salvo no raiz: '{sf_id_novo}'")
     elif sf_id_novo:
         cache_status[base_id]["streamflix_series_id"] = sf_id_novo
+
+    # --- SALVANDO A FLAG GLOBAL DO MYWALLPAPER ---
+    if "mywallpaper" in outras_tarefas:
+        if not mywallpaper_teve_resultados:
+            cache_status[base_id]["mywallpaper_global"] = "N"
+            print(f"[APP] mywallpaper_global salvo no raiz como 'N' (sem resultados).")
+        else:
+            cache_status[base_id]["mywallpaper_global"] = "S"
 
     if tmdb_id and type == "series":
         if episodes_backup is None:
