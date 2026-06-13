@@ -3,7 +3,7 @@ import asyncio
 # Troca o motor do asyncio antes de qualquer outra coisa
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,10 +20,11 @@ import re
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
+from datetime import datetime, date
 import serve
-import streamflix
 import mywallpaper
 import on
+import net
 
 load_dotenv()
 
@@ -385,6 +386,21 @@ async def get_recent_catalog_cached(content_type):
             pass
     return catalogs.get(content_type, [])
 
+def filtrar_populares_por_data(metas):
+    filtrados = []
+    for m in metas:
+        if m.get("type") == "movie":
+            rel_date_str = m.get("release_date")
+            if rel_date_str:
+                try:
+                    rel_date = datetime.strptime(rel_date_str, "%Y-%m-%d").date()
+                    if rel_date >= date.today():
+                        continue
+                except Exception:
+                    pass
+        filtrados.append(m)
+    return filtrados
+
 async def get_popular_catalog_cached(content_type):
     cache_file = os.path.join(CACHE_DIR, f"tmdb_popular_{content_type}.json")
 
@@ -393,7 +409,7 @@ async def get_popular_catalog_cached(content_type):
             with open(cache_file, "rb") as f:
                 dados_salvos = orjson.loads(f.read())
                 if dados_salvos:
-                    return dados_salvos
+                    return filtrar_populares_por_data(dados_salvos)
         except:
             pass
 
@@ -422,7 +438,8 @@ async def get_popular_catalog_cached(content_type):
                             "type": content_type,
                             "name": title,
                             "poster": f"https://image.tmdb.org/t/p/w500{poster_path}",
-                            "description": item.get("overview", "")
+                            "description": item.get("overview", ""),
+                            "release_date": item.get("release_date") or item.get("first_air_date")
                         })
 
         vistos = set()
@@ -440,9 +457,104 @@ async def get_popular_catalog_cached(content_type):
                 pass
             asyncio.create_task(sync_scraper_cache_from_items(metas_unicas, content_type))
 
-        return metas_unicas
+        return filtrar_populares_por_data(metas_unicas)
     except:
         return []
+
+async def get_populares_fenix_cached(content_type: str):
+    cache_file = os.path.join(CACHE_DIR, f"populares_fenix_{content_type}.json")
+
+    if os.path.exists(cache_file) and (time.time() - os.path.getmtime(cache_file)) < CATALOG_CACHE_TIME:
+        try:
+            with open(cache_file, "rb") as f:
+                dados_salvos = orjson.loads(f.read())
+                if dados_salvos:
+                    return dados_salvos
+        except:
+            pass
+
+    url = f"{SERVE_}/api/vistos" if SERVE_ else "https://fenixflix-2ymu.onrender.com/api/vistos"
+    try:
+        resp = await _http_client.get(url, timeout=15.0)
+        vistos = resp.json() if resp.status_code == 200 else []
+    except Exception as e:
+        print(f"[POPULARES FENIX] Erro ao buscar vistos: {e}")
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, "rb") as f:
+                    return orjson.loads(f.read())
+            except:
+                pass
+        return []
+
+    if not vistos:
+        return []
+
+    # Ordenar por visualizações de forma decrescente
+    vistos = sorted(vistos, key=lambda x: x.get("v", 0), reverse=True)
+    scraper_cache = load_scraper_cache()
+    
+    ids_to_resolve = []
+    for item in vistos:
+        item_id = item.get("id")
+        if not item_id:
+            continue
+        
+        if not (item_id.startswith("tt") or item_id.startswith("tmdb:")):
+            continue
+            
+        cached_entry = scraper_cache.get(item_id)
+        if cached_entry:
+            cached_type = cached_entry.get("type")
+            if cached_type and cached_type != content_type:
+                continue
+        
+        ids_to_resolve.append(item_id)
+        # Buscar até 60 candidatos para termos margem de encontrar 20 do tipo solicitado
+        if len(ids_to_resolve) >= 60:
+            break
+
+    if not ids_to_resolve:
+        return []
+
+    tasks = [fetch_tmdb_meta_ptbr(item_id, content_type) for item_id in ids_to_resolve]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    resolved_metas = []
+    cache_mudou = False
+    
+    for r in results:
+        if isinstance(r, dict):
+            if r.get("type") == content_type:
+                meta_item = {k: v for k, v in r.items() if k != "_tmdb_id"}
+                resolved_metas.append(meta_item)
+            
+            # Aproveitar para preencher no cache se não estiver lá
+            item_id = r.get("id")
+            if item_id and item_id not in scraper_cache:
+                tmdb_id_r = r.get("_tmdb_id")
+                if tmdb_id_r:
+                    scraper_cache[item_id] = {
+                        "tmdb_id": tmdb_id_r,
+                        "titles": [r.get("name")],
+                        "type": r.get("type"),
+                        "scrapers": {}
+                    }
+                    cache_mudou = True
+
+    if cache_mudou:
+        await save_scraper_cache(scraper_cache)
+
+    resolved_metas = resolved_metas[:20]
+
+    if resolved_metas:
+        try:
+            with open(cache_file, "wb") as f:
+                f.write(orjson.dumps(resolved_metas, option=orjson.OPT_INDENT_2))
+        except Exception as e:
+            print(f"[POPULARES FENIX] Erro ao gravar cache: {e}")
+
+    return resolved_metas
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -460,8 +572,10 @@ async def manifest_endpoint():
         "types": ["movie", "series"],
         "catalogs": [
             {"type": "movie",  "id": "popular",           "name": "Populares"},
+            {"type": "movie",  "id": "populares_fenix",   "name": "Populares (Fenix)"},
             {"type": "movie",  "id": "recentes_servidor", "name": "Recém Adicionado (Fenix)"},
             {"type": "series", "id": "popular",           "name": "Populares"},
+            {"type": "series", "id": "populares_fenix",   "name": "Populares (Fenix)"},
             {"type": "series", "id": "recentes_servidor", "name": "Recém Adicionado (Fenix)"}
         ],
         "idPrefixes": ["tt", "tmdb"]
@@ -479,12 +593,103 @@ async def catalog_endpoint(type: str, id: str, extra: str = None, skip: int = 0)
     elif id == "popular":
         metas = await get_popular_catalog_cached(type)
         return JSONResponse(content={"metas": metas})
+    elif id == "populares_fenix":
+        metas = await get_populares_fenix_cached(type)
+        return JSONResponse(content={"metas": metas})
 
     return JSONResponse(content={"metas": []})
 
+async def enviar_pedido_background(url: str):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FenixFlixAddon/1.0"}
+        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+            response = await client.get(url, headers=headers)
+            print(f"[AUTO-PEDIDO] Pedido enviado para {url} - Status: {response.status_code}")
+    except Exception as e:
+        print(f"[AUTO-PEDIDO] Erro ao enviar pedido automático: {e}")
+
+async def atualizar_cache_e_pedido(
+    base_id, tmdb_id, titles, type, novos_flags, outras_tarefas, 
+    pending_names, mywallpaper_teve_resultados, season, episode,
+    imdb_id_for_request, len_todos_streams
+):
+    try:
+        cache_status = load_scraper_cache()
+        cache_mudou = False
+
+        if base_id not in cache_status:
+            cache_status[base_id] = {"tmdb_id": tmdb_id, "titles": titles, "type": type}
+            cache_mudou = True
+
+        episodes_backup = cache_status[base_id].pop("episodes", None)
+        scrapers_backup = cache_status[base_id].pop("scrapers", None)
+
+        slug_novo = novos_flags.pop("_doramogo_slug_novo", None)
+        if slug_novo:
+            cache_status[base_id]["doramogo_slug"] = slug_novo
+            cache_mudou = True
+
+        if "mywallpaper" in outras_tarefas and mywallpaper_teve_resultados is not None:
+            mw_atual = cache_status[base_id].get("mywallpaper_global")
+            is_mw_pending = "mywallpaper" in pending_names
+            if not mywallpaper_teve_resultados and not is_mw_pending:
+                if mw_atual != "N":
+                    cache_status[base_id]["mywallpaper_global"] = "N"
+                    cache_mudou = True
+            elif not is_mw_pending:
+                if mw_atual != "S":
+                    cache_status[base_id]["mywallpaper_global"] = "S"
+                    cache_mudou = True
+
+        if tmdb_id and type == "series":
+            if episodes_backup is None:
+                episodes_backup = {}
+            flags_para_salvar = {k: v for k, v in novos_flags.items() if k != "doramogo_slug"}
+
+            ep_key = f"{season}:{episode}"
+            if ep_key not in episodes_backup:
+                episodes_backup[ep_key] = flags_para_salvar
+                cache_mudou = True
+            else:
+                if episodes_backup[ep_key] != flags_para_salvar:
+                    episodes_backup[ep_key].update(flags_para_salvar)
+                    cache_mudou = True
+
+            cache_status[base_id]["episodes"] = episodes_backup
+
+        elif tmdb_id:
+            if scrapers_backup is None:
+                scrapers_backup = {}
+            if scrapers_backup != novos_flags:
+                scrapers_backup.update(novos_flags)
+                cache_mudou = True
+            cache_status[base_id]["scrapers"] = scrapers_backup
+
+        if "streams_data" in cache_status[base_id]:
+            del cache_status[base_id]["streams_data"]
+            cache_mudou = True
+
+        if cache_mudou:
+            await save_scraper_cache(cache_status)
+
+        # Envia o pedido de forma automática/em background
+        if imdb_id_for_request and len_todos_streams == 0:
+            episode_suffix = ""
+            if type == "series" and season is not None and episode is not None:
+                episode_suffix = f"&episode=T{season:02d}EP{episode:02d}"
+            
+            base_server = SERVE_ or "https://fenixflix-2ymu.onrender.com"
+            base_server = base_server.rstrip('/')
+            pedidos_url = f"{base_server}/api/pedidos?id={imdb_id_for_request}&type={type}{episode_suffix}"
+            
+            await enviar_pedido_background(pedidos_url)
+    except Exception as e:
+        print(f"[BACKGROUND TASK ERROR] Erro na atualização do cache ou pedido: {e}")
+
+
 @app.get("/stream/{type}/{id}.json")
 @limiter.limit("30/minute")
-async def stream(type: str, id: str, request: Request):
+async def stream(type: str, id: str, request: Request, background_tasks: BackgroundTasks):
     season, episode = None, None
     if id.startswith("tmdb:"):
         parts = id.split(':')
@@ -496,10 +701,6 @@ async def stream(type: str, id: str, request: Request):
         clean_id = parts[0]
         if type == 'series' and len(parts) >= 3:
             season, episode = int(parts[1]), int(parts[2])
-
-    tarefa_serve = asyncio.create_task(
-        serve.search_serve(clean_id, type, season, episode, client=_serve_client)
-    )
 
     cache_status = load_scraper_cache()
     entry = cache_status.get(clean_id)
@@ -531,8 +732,11 @@ async def stream(type: str, id: str, request: Request):
         else:
             base_id = clean_id
 
+    tarefa_serve = asyncio.create_task(
+        serve.search_serve(clean_id, type, season, episode, client=_serve_client, titles=titles)
+    )
+
     outras_tarefas = {}
-    cached_streamflix_urls = []
     novos_flags = scraper_flags.copy()
 
     if tmdb_id:
@@ -552,7 +756,7 @@ async def stream(type: str, id: str, request: Request):
                     else:
                         on_cache[k] = v
 
-            outras_tarefas["on"] = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache))
+            outras_tarefas["on"] = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache, titles=titles))
 
         mw_flag_salva = cache_status.get(base_id, {}).get("mywallpaper_global")
 
@@ -563,20 +767,13 @@ async def stream(type: str, id: str, request: Request):
                 mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client)
             )
 
-        sflix_flag = scraper_flags.get("streamflix")
-        sf_id_salvo = cache_status.get(base_id, {}).get("streamflix_series_id")
-
-        if sf_id_salvo == "N":
-            novos_flags["streamflix"] = "N"
-        elif sflix_flag != "N":
-            if isinstance(sflix_flag, str) and sflix_flag.startswith("http"):
-                cached_streamflix_urls = [sflix_flag]
-            elif isinstance(sflix_flag, list):
-                cached_streamflix_urls = sflix_flag
-            else:
-                outras_tarefas["streamflix"] = asyncio.create_task(
-                    streamflix.search_serve(titles, type, season, episode, client=_http_client, cached_series_id=sf_id_salvo)
-                )
+        net_flag = scraper_flags.get("net")
+        if net_flag == "N":
+            novos_flags["net"] = "N"
+        else:
+            outras_tarefas["net"] = asyncio.create_task(
+                net.search_serve(tmdb_id, type, season, episode, client=_http_client, titles=titles)
+            )
 
     tarefas_ativas = {"serve": tarefa_serve}
     tarefas_ativas.update(outras_tarefas)
@@ -610,17 +807,6 @@ async def stream(type: str, id: str, request: Request):
         if nome == "mywallpaper" and isinstance(res, list) and len(res) > 0:
             mywallpaper_teve_resultados = True
 
-        if nome == "streamflix" and isinstance(res, list):
-            for s in res:
-                if isinstance(s, dict) and "_streamflix_series_id" in s:
-                    novos_flags["_streamflix_series_id"] = s["_streamflix_series_id"]
-
-            urls = [s.get("url") for s in res if isinstance(s, dict) and s.get("url")]
-            if urls:
-                novos_flags[nome] = urls[0] if len(urls) == 1 else urls
-            else:
-                novos_flags[nome] = "N"
-
         elif nome == "on":
             on_dict = {}
             for s in res:
@@ -644,83 +830,40 @@ async def stream(type: str, id: str, request: Request):
                 s_info.pop("_mediafire_url", None)
                 s_info.pop("_label", None)
                 s_info.pop("_cache_key", None)
-                s_info.pop("_streamflix_series_id", None)
 
                 if "behaviorHints" not in s_info:
                     s_info["behaviorHints"] = {"notWebReady": False, "bingeGroup": "fenixflix"}
                 todos_streams.append(s_info)
 
-    for url in cached_streamflix_urls:
-        todos_streams.append({
-            "name": "FenixFlix",
-            "title": "Dublado\nStream",
-            "url": url,
-            "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-streamflix"}
-        })
+    # Identify pending names
+    pending_names = []
+    for nome, tarefa in tarefas_ativas.items():
+        if tarefa in pending:
+            pending_names.append(nome)
 
-    cache_mudou = False
+    imdb_id_for_request = None
+    if base_id and base_id.startswith("tt"):
+        imdb_id_for_request = base_id
+    elif clean_id and clean_id.startswith("tt"):
+        imdb_id_for_request = clean_id
+    else:
+        imdb_id_for_request = clean_id
 
-    if base_id not in cache_status:
-        cache_status[base_id] = {"tmdb_id": tmdb_id, "titles": titles, "type": type}
-        cache_mudou = True
-
-    episodes_backup = cache_status[base_id].pop("episodes", None)
-    scrapers_backup = cache_status[base_id].pop("scrapers", None)
-
-    slug_novo = novos_flags.pop("_doramogo_slug_novo", None)
-    if slug_novo:
-        cache_status[base_id]["doramogo_slug"] = slug_novo
-        cache_mudou = True
-
-    sf_id_novo = novos_flags.pop("_streamflix_series_id", None)
-    id_atual = cache_status.get(base_id, {}).get("streamflix_series_id")
-    if sf_id_novo and sf_id_novo != id_atual:
-        cache_status[base_id]["streamflix_series_id"] = sf_id_novo
-        cache_mudou = True
-    elif sf_id_novo:
-        cache_status[base_id]["streamflix_series_id"] = sf_id_novo
-
-    if "mywallpaper" in outras_tarefas and mywallpaper_teve_resultados is not None:
-        mw_atual = cache_status[base_id].get("mywallpaper_global")
-        if not mywallpaper_teve_resultados and "mywallpaper" not in pending:
-            if mw_atual != "N":
-                cache_status[base_id]["mywallpaper_global"] = "N"
-                cache_mudou = True
-        elif "mywallpaper" not in pending:
-            if mw_atual != "S":
-                cache_status[base_id]["mywallpaper_global"] = "S"
-                cache_mudou = True
-
-    if tmdb_id and type == "series":
-        if episodes_backup is None:
-            episodes_backup = {}
-        flags_para_salvar = {k: v for k, v in novos_flags.items() if k != "doramogo_slug"}
-
-        ep_key = f"{season}:{episode}"
-        if ep_key not in episodes_backup:
-            episodes_backup[ep_key] = flags_para_salvar
-            cache_mudou = True
-        else:
-            if episodes_backup[ep_key] != flags_para_salvar:
-                episodes_backup[ep_key].update(flags_para_salvar)
-                cache_mudou = True
-
-        cache_status[base_id]["episodes"] = episodes_backup
-
-    elif tmdb_id:
-        if scrapers_backup is None:
-            scrapers_backup = {}
-        if scrapers_backup != novos_flags:
-            scrapers_backup.update(novos_flags)
-            cache_mudou = True
-        cache_status[base_id]["scrapers"] = scrapers_backup
-
-    if "streams_data" in cache_status[base_id]:
-        del cache_status[base_id]["streams_data"]
-        cache_mudou = True
-
-    if cache_mudou:
-        await save_scraper_cache(cache_status)
+    background_tasks.add_task(
+        atualizar_cache_e_pedido,
+        base_id=base_id,
+        tmdb_id=tmdb_id,
+        titles=titles,
+        type=type,
+        novos_flags=novos_flags,
+        outras_tarefas=list(outras_tarefas.keys()),
+        pending_names=pending_names,
+        mywallpaper_teve_resultados=mywallpaper_teve_resultados,
+        season=season,
+        episode=episode,
+        imdb_id_for_request=imdb_id_for_request,
+        len_todos_streams=len(todos_streams)
+    )
 
     return JSONResponse(content={"streams": todos_streams})
 

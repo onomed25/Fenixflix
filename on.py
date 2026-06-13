@@ -29,7 +29,7 @@ def parse_mediafire_btn(html_text):
 
 # --------------------------------------------------------
 
-async def extrair_link(label, cache_key, target_url, client, cached_mediafire_url=None):
+async def extrair_link(label, cache_key, target_url, client, cached_mediafire_url=None, nome=None, tep=None, season=None):
     mediafire_url = cached_mediafire_url
 
     # 1. Se o cache disser "N", pula tudo!
@@ -80,10 +80,21 @@ async def extrair_link(label, cache_key, target_url, client, cached_mediafire_ur
         final_mp4 = await asyncio.to_thread(parse_mediafire_btn, mf_res.text)
 
         if final_mp4:
-            print(f"[Azullog Debug] ✅ Sucesso ({label})! Link final MP4 fresco extraído.")
+            partes = []
+            if nome:
+                partes.append(nome)
+            if tep:
+                partes.append(tep)
+            partes.append(f"{label}(ON)")
+            desc = "\n".join(partes)
+
+            name_str = "ON"
+            if season is not None and str(season).strip():
+                name_str = f"ON - Temporada {season}"
+
             return {
                 "name": "FenixFlix",
-                "description": f"{label}\nON",
+                "description": desc,
                 "url": final_mp4,
                 "behaviorHints": {"notWebReady": False, "bingeGroup": f"fenixflix-azullog-{label.lower()}"},
                 "_mediafire_url": mediafire_url,
@@ -100,7 +111,7 @@ async def extrair_link(label, cache_key, target_url, client, cached_mediafire_ur
 
     return None
 
-async def search_serve(tmdb_id: str, content_type: str, season=None, episode=None, client: httpx.AsyncClient = None, cached_links=None):
+async def search_serve(tmdb_id: str, content_type: str, season=None, episode=None, client: httpx.AsyncClient = None, cached_links=None, titles: list = None):
     streams = []
     urls_to_check = []
 
@@ -109,12 +120,28 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 
     print(f"\n[Azullog Debug] Iniciando busca para TMDB ID: {tmdb_id} | Tipo: {content_type} | S{season}E{episode}")
 
+    nome = ""
+    if titles:
+        if isinstance(titles, list) or isinstance(titles, tuple):
+            nome = titles[0] if len(titles) > 0 else ""
+        else:
+            nome = str(titles)
+
+    tep = ""
+    if content_type == "series":
+        try:
+            s_pad = f"{int(season):02d}"
+            e_pad = f"{int(episode):02d}"
+            tep = f"T{s_pad} EP{e_pad}"
+        except Exception:
+            tep = f"T{season} EP{episode}"
+
     if content_type == "movie":
-        urls_to_check.append(("Dublado", "D", f"https://1take.lat/e/tmdb{tmdb_id}dub"))
-        urls_to_check.append(("Legendado", "L", f"https://1take.lat/e/tmdb{tmdb_id}leg"))
+        urls_to_check.append(("Dublado", "D", f"https://1take.top/e/tmdb{tmdb_id}dub"))
+        urls_to_check.append(("Legendado", "L", f"https://1take.top/e/tmdb{tmdb_id}leg"))
     else:
-        urls_to_check.append(("Dublado", "D", f"https://1take.lat/e/tvtmdb{tmdb_id}t{season}e{episode}dub"))
-        urls_to_check.append(("Legendado", "L", f"https://1take.lat/e/tvtmdb{tmdb_id}t{season}e{episode}leg"))
+        urls_to_check.append(("Dublado", "D", f"https://1take.top/e/tvtmdb{tmdb_id}t{season}e{episode}dub"))
+        urls_to_check.append(("Legendado", "L", f"https://1take.top/e/tvtmdb{tmdb_id}t{season}e{episode}leg"))
 
     close_client = False
     if client is None:
@@ -122,7 +149,7 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
         close_client = True
 
     try:
-        tarefas = [extrair_link(label, cache_key, target_url, client, cached_links.get(cache_key)) for label, cache_key, target_url in urls_to_check]
+        tarefas = [extrair_link(label, cache_key, target_url, client, cached_links.get(cache_key), nome=nome, tep=tep, season=season if content_type == "series" else None) for label, cache_key, target_url in urls_to_check]
         resultados = await asyncio.gather(*tarefas)
 
         dublado_ok = False
@@ -155,7 +182,7 @@ async def search_serve(tmdb_id: str, content_type: str, season=None, episode=Non
 if __name__ == "__main__":
     async def rodar_teste():
         cache_simulado = {"D": "https://www.mediafire.com/file_premium/simulacao_filme", "L": "N"}
-        streams_filme = await search_serve("550", "movie", cached_links=cache_simulado)
+        streams_filme = await search_serve("550", "movie", cached_links=cache_simulado, titles=["Clube da Luta"])
         print("\nFilme Resultado Final:", streams_filme)
 
     asyncio.run(rodar_teste())
