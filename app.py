@@ -732,8 +732,15 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
         else:
             base_id = clean_id
 
+    import inspect
+
+    # Resolve serve.search_serve signature dynamically
+    kwargs_serve = {}
+    if "titles" in inspect.signature(serve.search_serve).parameters:
+        kwargs_serve["titles"] = titles
+
     tarefa_serve = asyncio.create_task(
-        serve.search_serve(clean_id, type, season, episode, client=_serve_client, titles=titles)
+        serve.search_serve(clean_id, type, season, episode, client=_serve_client, **kwargs_serve)
     )
 
     outras_tarefas = {}
@@ -756,7 +763,12 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                     else:
                         on_cache[k] = v
 
-            outras_tarefas["on"] = asyncio.create_task(on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache, titles=titles))
+            kwargs_on = {}
+            if "titles" in inspect.signature(on.search_serve).parameters:
+                kwargs_on["titles"] = titles
+            outras_tarefas["on"] = asyncio.create_task(
+                on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache, **kwargs_on)
+            )
 
         mw_flag_salva = cache_status.get(base_id, {}).get("mywallpaper_global")
 
@@ -771,8 +783,11 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
         if net_flag == "N":
             novos_flags["net"] = "N"
         else:
+            kwargs_net = {}
+            if "titles" in inspect.signature(net.search_serve).parameters:
+                kwargs_net["titles"] = titles
             outras_tarefas["net"] = asyncio.create_task(
-                net.search_serve(tmdb_id, type, season, episode, client=_http_client, titles=titles)
+                net.search_serve(tmdb_id, type, season, episode, client=_http_client, **kwargs_net)
             )
 
     tarefas_ativas = {"serve": tarefa_serve}

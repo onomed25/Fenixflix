@@ -14,7 +14,7 @@ TAPECONTENT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
 
-async def search_serve(imdb_id, content_type, season=None, episode=None, client: httpx.AsyncClient = None):
+async def search_serve(imdb_id, content_type, season=None, episode=None, client: httpx.AsyncClient = None, titles=None):
     url = f"{SERVE_}/{imdb_id}"
 
     async def _fetch(c):
@@ -58,7 +58,7 @@ async def search_serve(imdb_id, content_type, season=None, episode=None, client:
                 else:
                     label = "Dublado"
                     url_stream = stream_obj
-                streams_formatados.append(montar_stream(url_stream, label))
+                streams_formatados.append(montar_stream(url_stream, label, content_type, season, episode, titles))
 
             return streams_formatados
 
@@ -75,7 +75,7 @@ async def search_serve(imdb_id, content_type, season=None, episode=None, client:
                 else:
                     label = "Dublado"
                     url_stream = stream_obj
-                streams_formatados.append(montar_stream(url_stream, label))
+                streams_formatados.append(montar_stream(url_stream, label, content_type, season, episode, titles))
 
             return streams_formatados
 
@@ -90,7 +90,9 @@ async def search_serve(imdb_id, content_type, season=None, episode=None, client:
     return []
 
 
-def montar_stream(url_stream, label):
+import re
+
+def montar_stream(url_stream, label, content_type, season=None, episode=None, titles=None):
     bases = [
         "https://husky-denny-fenixflixaddon-ec8e842b.koyeb.app",
         "https://passing-melinda-onomed1-d0cbec40.koyeb.app"
@@ -102,9 +104,63 @@ def montar_stream(url_stream, label):
         path = url_stream[path_index:]
         url_stream = f"{base}{path}"
 
+    # 1. Procurar qualidade
+    qualidade = "HD"
+    label_lower = label.lower()
+    url_lower = (url_stream or "").lower()
+    if "1080" in label_lower or "1080" in url_lower:
+        qualidade = "1080p"
+    elif "720" in label_lower or "720" in url_lower:
+        qualidade = "720p"
+    elif "4k" in label_lower or "2160" in url_lower:
+        qualidade = "4K"
+    elif "hd" in label_lower or "hd" in url_lower:
+        qualidade = "HD"
+
+    # 2. Limpar label para a descrição (remover qualidade e FenixFlix)
+    desc_label = label
+    desc_label = re.sub(r'(?i)\bFenixflix\b', '', desc_label)
+    desc_label = re.sub(r'(?i)\b(1080p|720p|4k|2160p|hd)\b', '', desc_label)
+    # Remover múltiplos espaços/hifens/pontos extras
+    desc_label = re.sub(r'\s*-\s*', ' ', desc_label)
+    desc_label = re.sub(r'\s+', ' ', desc_label).strip()
+
+    if not desc_label:
+        if "legen" in label_lower:
+            desc_label = "Legendado"
+        else:
+            desc_label = "Dublado"
+
+    # 3. Obter nome do filme/série
+    nome = ""
+    if titles:
+        if isinstance(titles, list) or isinstance(titles, tuple):
+            nome = titles[0] if len(titles) > 0 else ""
+        else:
+            nome = str(titles)
+
+    # 4. Formatar temporada/episódio
+    tep = ""
+    if content_type == "series" and season and episode:
+        try:
+            s_pad = f"{int(season):02d}"
+            e_pad = f"{int(episode):02d}"
+            tep = f"T{s_pad} EP{e_pad}"
+        except Exception:
+            tep = f"T{season} EP{episode}"
+
+    # 5. Montar descrição ("nome no topo")
+    partes = []
+    if nome:
+        partes.append(nome)
+    if tep:
+        partes.append(tep)
+    partes.append(desc_label)
+    description_str = "\n".join(partes)
+
     stream = {
-        "name": "FenixFlix",
-        "description": label,
+        "name": f"FenixFlix\n{qualidade}",
+        "description": description_str,
         "url": url_stream,
         "behaviorHints": {
             "notWebReady": False,
