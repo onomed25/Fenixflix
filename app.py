@@ -561,7 +561,7 @@ async def get_populares_fenix_cached(content_type: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    manifest_data = {"name": "FENIXFLIX", "description": "Addon de Filmes e Séries", "types": ["movie", "series"]}
+    manifest_data = {"name": "FENIXFLIX", "description": "Add-on de filmes e séries dublados e legendados (Português PT‑BR) ", "types": ["movie", "series"]}
     return templates.TemplateResponse(request=request, name="index.html", context={"manifest": manifest_data, "version": VERSION})
 
 @app.get("/manifest.json")
