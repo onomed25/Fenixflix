@@ -561,14 +561,14 @@ async def get_populares_fenix_cached(content_type: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    manifest_data = {"name": "FENIXFLIX", "description": "Add-on de filmes e séries dublados e legendados (Português PT‑BR) ", "types": ["movie", "series"]}
+    manifest_data = {"name": "FENIXFLIX", "description": "Addon de filmes e séries dublados e legendados em Português (PT‑BR)", "types": ["movie", "series"]}
     return templates.TemplateResponse(request=request, name="index.html", context={"manifest": manifest_data, "version": VERSION})
 
 @app.get("/manifest.json")
 async def manifest_endpoint():
     return JSONResponse(content={
         "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
-        "description": "Addon de Filmes e Séries",
+        "description": "Addon de filmes e séries dublados e legendados em Português (PT‑BR)",
         "logo": "https://i.imgur.com/9SKgxfU.png",
         "background": "https://dl.strem.io/addon-background.jpg",
         "resources": ["stream", "catalog"],
