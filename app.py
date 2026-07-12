@@ -187,20 +187,8 @@ async def sequential_prewarm():
     await asyncio.sleep(15.0)
     print("[STARTUP-PREWARM] Iniciando rebuild sequencial de catálogos...")
 
-    # 1. HypEx
-    try:
-        c = hypex.get_hypex_client()
-        if not c.autenticado:
-            await c.autenticar()
-        print("[STARTUP-PREWARM] Hypex: Reconstruindo catálogo de filmes...")
-        await hypex._background_rebuild(c, "movie")
-        import gc; gc.collect()
-        
-        print("[STARTUP-PREWARM] Hypex: Reconstruindo catálogo de séries...")
-        await hypex._background_rebuild(c, "series")
-        import gc; gc.collect()
-    except Exception as e:
-        print(f"[STARTUP-PREWARM] Erro no pre-warm Hypex: {e}")
+    # 1. HypEx (DESATIVADO PARA TESTES)
+    print("[STARTUP-PREWARM] Hypex desativado para testes.")
 
     # 2. Atlas (DESATIVADO PARA TESTES)
     print("[STARTUP-PREWARM] Atlas desativado para testes.")
@@ -914,47 +902,8 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
 
 
 
-        # Hypex Integration
-        hypex_sid = entry.get("hypex_sid") if entry else None
-        hx_flag = scraper_flags.get("hypex")
-
-        if is_anime:
-            # Hypex não tem anime, bloqueamos diretamente
-            novos_flags["hypex"] = "N"
-        elif isinstance(hx_flag, list):
-            title_name = titles[0] if titles else "Filme"
-            for item in hx_flag:
-                if isinstance(item, dict) and item.get("url"):
-                    url = item["url"]
-                    qualidade = item.get("q", "HD")
-                    audio_char = item.get("a", "D")
-                    
-                    if audio_char == "L":
-                        audio_info = "Legendado"
-                    elif audio_char == "Dual":
-                        audio_info = "Dual Áudio"
-                    elif audio_char == "Nac":
-                        audio_info = "Nacional"
-                    else:
-                        audio_info = "Dublado"
-                    
-                    title_str = format_stream_title(title_name, type, season, episode, audio_info=audio_info)
-                    stream_obj = {
-                        "name": f"FenixFlix\n{qualidade}",
-                        "title": f"{title_str}\nHypex",
-                        "url": url,
-                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-hypex"}
-                    }
-                    if isinstance(item, dict) and "headers" in item:
-                        stream_obj["headers"] = item["headers"]
-                    todos_streams.append(stream_obj)
-            novos_flags["hypex"] = hx_flag
-        elif (type == "series" and hypex_sid == "N") or (type == "movie" and hx_flag == "N"):
-            novos_flags["hypex"] = "N"
-        else:
-            outras_tarefas["hypex"] = asyncio.create_task(
-                hypex.search_serve(titles, type, season, episode, cached_series_id=hypex_sid, year=year)
-            )
+        # Hypex Integration (DESATIVADO PARA TESTES)
+        novos_flags["hypex"] = "N"
 
         # Atlas Integration (DESATIVADO PARA TESTES)
         novos_flags["atlas"] = "N"
