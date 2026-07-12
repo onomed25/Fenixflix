@@ -145,7 +145,7 @@ class MegaplayClient:
             params["category_id"] = category_id
         try:
             resp = await self.client.get(f"{self.base_url}/player_api.php", params=params)
-            return resp.json() if resp.status_code == 200 else []
+            return _json.loads(resp.content) if resp.status_code == 200 else []
         except Exception as e:
             print(f"[Hypex Erro] Falha ao carregar filmes: {e}")
             return []
@@ -157,7 +157,7 @@ class MegaplayClient:
             params["category_id"] = category_id
         try:
             resp = await self.client.get(f"{self.base_url}/player_api.php", params=params)
-            return resp.json() if resp.status_code == 200 else []
+            return _json.loads(resp.content) if resp.status_code == 200 else []
         except Exception as e:
             print(f"[Hypex Erro] Falha ao carregar séries: {e}")
             return []
@@ -327,11 +327,13 @@ async def _rebuild_movies(client: MegaplayClient, db: aiosqlite.Connection):
     try:
         data_list = await client.get_vod_streams()
         await db.execute("DELETE FROM movies")
-        rows = []
-        for m in data_list:
+        
+        batch = []
+        inserted_count = 0
+        while data_list:
+            m = data_list.pop()
             name = m.get("name")
             if name:
-                # Prioriza extrair do nome original (ex: "Normal [L] (2026)")
                 year_val = _extract_year(name)
                 if not year_val:
                     year_val = m.get("year")
@@ -341,10 +343,10 @@ async def _rebuild_movies(client: MegaplayClient, db: aiosqlite.Connection):
                         except Exception:
                             year_val = None
                 if not year_val:
-                    # Fallback: extrai do release_date
                     rd = m.get("release_date", "")
                     year_val = int(rd[:4]) if rd and len(rd) >= 4 else None
-                rows.append((
+                
+                batch.append((
                     clean_title(name),
                     m.get("stream_id"),
                     m.get("container_extension", "mp4"),
@@ -352,13 +354,26 @@ async def _rebuild_movies(client: MegaplayClient, db: aiosqlite.Connection):
                     str(m.get("category_id", "")),
                     year_val
                 ))
-        await db.executemany(
-            "INSERT INTO movies(clean_title, stream_id, ext, original_name, category_id, year) VALUES (?,?,?,?,?,?)",
-            rows
-        )
+                
+                if len(batch) >= 1000:
+                    await db.executemany(
+                        "INSERT INTO movies(clean_title, stream_id, ext, original_name, category_id, year) VALUES (?,?,?,?,?,?)",
+                        batch
+                    )
+                    inserted_count += len(batch)
+                    batch.clear()
+                    
+        if batch:
+            await db.executemany(
+                "INSERT INTO movies(clean_title, stream_id, ext, original_name, category_id, year) VALUES (?,?,?,?,?,?)",
+                batch
+            )
+            inserted_count += len(batch)
+            batch.clear()
+
         await db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES ('movies_updated', ?)", (str(time.time()),))
         await db.commit()
-        print(f"[Hypex SQLite] {len(rows)} filmes salvos no SQLite.")
+        print(f"[Hypex SQLite] {inserted_count} filmes salvos no SQLite.")
     except Exception as e:
         print(f"[Hypex SQLite] Erro ao rebuild de filmes: {e}")
 
@@ -369,11 +384,13 @@ async def _rebuild_series(client: MegaplayClient, db: aiosqlite.Connection):
     try:
         data_list = await client.get_series()
         await db.execute("DELETE FROM series")
-        rows = []
-        for s in data_list:
+        
+        batch = []
+        inserted_count = 0
+        while data_list:
+            s = data_list.pop()
             name = s.get("name")
             if name:
-                # Prioriza extrair do nome original
                 year_val = _extract_year(name)
                 if not year_val:
                     year_campo = s.get("year")
@@ -382,20 +399,32 @@ async def _rebuild_series(client: MegaplayClient, db: aiosqlite.Connection):
                             year_val = int(str(year_campo)[:4])
                         except Exception:
                             pass
-                rows.append((
+                batch.append((
                     clean_title(name),
                     s.get("series_id"),
                     str(s.get("category_id", "")),
                     name,
                     year_val
                 ))
-        await db.executemany(
-            "INSERT INTO series(clean_title, series_id, category_id, original_name, year) VALUES (?,?,?,?,?)",
-            rows
-        )
+                if len(batch) >= 1000:
+                    await db.executemany(
+                        "INSERT INTO series(clean_title, series_id, category_id, original_name, year) VALUES (?,?,?,?,?)",
+                        batch
+                    )
+                    inserted_count += len(batch)
+                    batch.clear()
+                    
+        if batch:
+            await db.executemany(
+                "INSERT INTO series(clean_title, series_id, category_id, original_name, year) VALUES (?,?,?,?,?)",
+                batch
+            )
+            inserted_count += len(batch)
+            batch.clear()
+
         await db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES ('series_updated', ?)", (str(time.time()),))
         await db.commit()
-        print(f"[Hypex SQLite] {len(rows)} séries salvas no SQLite.")
+        print(f"[Hypex SQLite] {inserted_count} séries salvas no SQLite.")
     except Exception as e:
         print(f"[Hypex SQLite] Erro ao rebuild de séries: {e}")
 
