@@ -17,6 +17,12 @@ from typing import Dict, List, Any, Optional
 import hashlib
 import httpx
 import aiosqlite
+# Aumenta o timeout padrão do SQLite para evitar "database is locked"
+_orig_connect = aiosqlite.connect
+def _custom_connect(*args, **kwargs):
+    kwargs.setdefault("timeout", 30.0)
+    return _orig_connect(*args, **kwargs)
+aiosqlite.connect = _custom_connect
 try:
     import orjson as _json
 except ImportError:          # fallback se orjson não estiver instalado
@@ -211,6 +217,8 @@ def get_figs_client() -> FigsClient:
 
 async def _init_db(db: aiosqlite.Connection):
     """Cria as tabelas e índices se ainda não existirem."""
+    await db.execute("PRAGMA journal_mode=WAL;")
+    await db.execute("PRAGMA synchronous=NORMAL;")
     await db.execute("""
         CREATE TABLE IF NOT EXISTS meta (
             key   TEXT PRIMARY KEY,

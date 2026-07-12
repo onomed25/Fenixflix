@@ -182,6 +182,58 @@ async def prepopulate_scraper_cache_from_popular():
         except Exception as e:
             print(f"[SCRAPER-CACHE] Erro ao ler cache popular '{content_type}': {e}")
 
+async def sequential_prewarm():
+    # Delay de 15s para permitir que o Uvicorn inicie e responda à verificação de saúde do Render
+    await asyncio.sleep(15.0)
+    print("[STARTUP-PREWARM] Iniciando rebuild sequencial de catálogos...")
+
+    # 1. HypEx
+    try:
+        c = hypex.get_hypex_client()
+        if not c.autenticado:
+            await c.autenticar()
+        print("[STARTUP-PREWARM] Hypex: Reconstruindo catálogo de filmes...")
+        await hypex._background_rebuild(c, "movie")
+        import gc; gc.collect()
+        
+        print("[STARTUP-PREWARM] Hypex: Reconstruindo catálogo de séries...")
+        await hypex._background_rebuild(c, "series")
+        import gc; gc.collect()
+    except Exception as e:
+        print(f"[STARTUP-PREWARM] Erro no pre-warm Hypex: {e}")
+
+    # 2. Atlas
+    try:
+        c_at = atlas.get_atlas_client()
+        if not c_at.autenticado:
+            await c_at.autenticar()
+        print("[STARTUP-PREWARM] Atlas: Reconstruindo catálogo de filmes...")
+        await atlas._background_rebuild(c_at, "movie")
+        import gc; gc.collect()
+        
+        print("[STARTUP-PREWARM] Atlas: Reconstruindo catálogo de séries...")
+        await atlas._background_rebuild(c_at, "series")
+        import gc; gc.collect()
+    except Exception as e:
+        print(f"[STARTUP-PREWARM] Erro no pre-warm Atlas: {e}")
+
+    # 3. Figs
+    try:
+        c_fg = figs.get_figs_client()
+        if not c_fg.autenticado:
+            await c_fg.autenticar()
+        print("[STARTUP-PREWARM] Figs: Reconstruindo catálogo de filmes...")
+        await figs._background_rebuild(c_fg, "movie")
+        import gc; gc.collect()
+        
+        print("[STARTUP-PREWARM] Figs: Reconstruindo catálogo de séries...")
+        await figs._background_rebuild(c_fg, "series")
+        import gc; gc.collect()
+    except Exception as e:
+        print(f"[STARTUP-PREWARM] Erro no pre-warm Figs: {e}")
+
+    print("[STARTUP-PREWARM] Todos os pre-warms de catálogo concluídos sequencialmente!")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _http_client, _serve_client
@@ -208,37 +260,9 @@ async def lifespan(app: FastAPI):
 
     await prepopulate_scraper_cache_from_popular()
 
-    # Pre-warm: agenda rebuild do catálogo HypEx em background no startup
-    # para que o primeiro request já encontre dados prontos no SQLite
-    try:
-        c = hypex.get_hypex_client()
-        if not c.autenticado:
-            await c.autenticar()
-        asyncio.create_task(hypex._ensure_catalog(c, "movie"))
-        asyncio.create_task(hypex._ensure_catalog(c, "series"))
-        print("[STARTUP] Pre-warm do catálogo HypEx agendado em background.")
-    except Exception as e:
-        print(f"[STARTUP] Aviso: não foi possível pre-warm HypEx: {e}")
-
-    try:
-        c_at = atlas.get_atlas_client()
-        if not c_at.autenticado:
-            await c_at.autenticar()
-        asyncio.create_task(atlas._ensure_catalog(c_at, "movie"))
-        asyncio.create_task(atlas._ensure_catalog(c_at, "series"))
-        print("[STARTUP] Pre-warm do catálogo Atlas agendado em background.")
-    except Exception as e:
-        print(f"[STARTUP] Aviso: não foi possível pre-warm Atlas: {e}")
-
-    try:
-        c_fg = figs.get_figs_client()
-        if not c_fg.autenticado:
-            await c_fg.autenticar()
-        asyncio.create_task(figs._ensure_catalog(c_fg, "movie"))
-        asyncio.create_task(figs._ensure_catalog(c_fg, "series"))
-        print("[STARTUP] Pre-warm do catálogo Figs agendado em background.")
-    except Exception as e:
-        print(f"[STARTUP] Aviso: não foi possível pre-warm Figs: {e}")
+    # Pre-warm: agenda rebuild dos catálogos de forma sequencial em background
+    # para evitar pico de memória (OOM > 512MB) e travamento do SQLite no startup
+    asyncio.create_task(sequential_prewarm())
 
     yield
 
