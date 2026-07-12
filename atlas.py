@@ -321,109 +321,211 @@ async def _get_catalog_age(db: aiosqlite.Connection, key: str) -> float:
 
 
 async def _rebuild_movies(client: AtlasClient, db: aiosqlite.Connection):
-    """Baixa o catálogo completo de filmes e regrava no SQLite."""
-    print("[Atlas SQLite] Baixando catálogo completo de filmes...")
+    """Baixa o catálogo completo de filmes (categoria por categoria) e regrava no SQLite."""
+    print("[Atlas SQLite] Iniciando rebuild de filmes categoria por categoria...")
     try:
-        data_list = await client.get_vod_streams()
+        categories = await client.get_vod_categories()
         await db.execute("DELETE FROM movies")
         
-        batch = []
         inserted_count = 0
-        while data_list:
-            m = data_list.pop()
-            name = m.get("name")
-            if name:
-                year_val = _extract_year(name)
-                if not year_val:
-                    year_val = m.get("year")
-                    if year_val:
-                        try:
-                            year_val = int(str(year_val)[:4])
-                        except Exception:
-                            year_val = None
-                if not year_val:
-                    rd = m.get("release_date", "")
-                    year_val = int(rd[:4]) if rd and len(rd) >= 4 else None
+        batch = []
+        
+        if not categories:
+            print("[Atlas SQLite] Nenhuma categoria encontrada, tentando carregar tudo de uma vez...")
+            data_list = await client.get_vod_streams()
+            while data_list:
+                m = data_list.pop()
+                name = m.get("name")
+                if name:
+                    year_val = _extract_year(name)
+                    if not year_val:
+                        year_val = m.get("year")
+                        if year_val:
+                            try:
+                                year_val = int(str(year_val)[:4])
+                            except Exception:
+                                year_val = None
+                    if not year_val:
+                        rd = m.get("release_date", "")
+                        year_val = int(rd[:4]) if rd and len(rd) >= 4 else None
+                    batch.append((
+                        clean_title(name),
+                        m.get("stream_id"),
+                        m.get("container_extension", "mp4"),
+                        name,
+                        str(m.get("category_id", "")),
+                        year_val
+                    ))
+                    if len(batch) >= 1000:
+                        await db.executemany(
+                            "INSERT INTO movies(clean_title, stream_id, ext, original_name, category_id, year) VALUES (?,?,?,?,?,?)",
+                            batch
+                        )
+                        inserted_count += len(batch)
+                        batch.clear()
+            if batch:
+                await db.executemany(
+                    "INSERT INTO movies(clean_title, stream_id, ext, original_name, category_id, year) VALUES (?,?,?,?,?,?)",
+                    batch
+                )
+                inserted_count += len(batch)
+                batch.clear()
+        else:
+            print(f"[Atlas SQLite] Processando {len(categories)} categorias de filmes...")
+            for cat in categories:
+                cat_id = cat.get("category_id")
+                if not cat_id:
+                    continue
                 
-                batch.append((
-                    clean_title(name),
-                    m.get("stream_id"),
-                    m.get("container_extension", "mp4"),
-                    name,
-                    str(m.get("category_id", "")),
-                    year_val
-                ))
+                data_list = await client.get_vod_streams(category_id=cat_id)
+                if not data_list:
+                    continue
                 
-                if len(batch) >= 1000:
-                    await db.executemany(
-                        "INSERT INTO movies(clean_title, stream_id, ext, original_name, category_id, year) VALUES (?,?,?,?,?,?)",
-                        batch
-                    )
-                    inserted_count += len(batch)
-                    batch.clear()
-                    
-        if batch:
-            await db.executemany(
-                "INSERT INTO movies(clean_title, stream_id, ext, original_name, category_id, year) VALUES (?,?,?,?,?,?)",
-                batch
-            )
-            inserted_count += len(batch)
-            batch.clear()
+                while data_list:
+                    m = data_list.pop()
+                    name = m.get("name")
+                    if name:
+                        year_val = _extract_year(name)
+                        if not year_val:
+                            year_val = m.get("year")
+                            if year_val:
+                                try:
+                                    year_val = int(str(year_val)[:4])
+                                except Exception:
+                                    year_val = None
+                        if not year_val:
+                            rd = m.get("release_date", "")
+                            year_val = int(rd[:4]) if rd and len(rd) >= 4 else None
+                        
+                        batch.append((
+                            clean_title(name),
+                            m.get("stream_id"),
+                            m.get("container_extension", "mp4"),
+                            name,
+                            str(m.get("category_id", "")),
+                            year_val
+                        ))
+                        
+                        if len(batch) >= 1000:
+                            await db.executemany(
+                                "INSERT INTO movies(clean_title, stream_id, ext, original_name, category_id, year) VALUES (?,?,?,?,?,?)",
+                                batch
+                            )
+                            inserted_count += len(batch)
+                            batch.clear()
+                import gc; gc.collect()
+            
+            if batch:
+                await db.executemany(
+                    "INSERT INTO movies(clean_title, stream_id, ext, original_name, category_id, year) VALUES (?,?,?,?,?,?)",
+                    batch
+                )
+                inserted_count += len(batch)
+                batch.clear()
 
         await db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES ('movies_updated', ?)", (str(time.time()),))
         await db.commit()
-        print(f"[Atlas SQLite] {inserted_count} filmes salvos no SQLite.")
+        print(f"[Atlas SQLite] Rebuild concluído. {inserted_count} filmes salvos no SQLite.")
     except Exception as e:
         print(f"[Atlas SQLite] Erro ao rebuild de filmes: {e}")
 
 
 async def _rebuild_series(client: AtlasClient, db: aiosqlite.Connection):
-    """Baixa o catálogo completo de séries e regrava no SQLite."""
-    print("[Atlas SQLite] Baixando catálogo completo de séries...")
+    """Baixa o catálogo completo de séries (categoria por categoria) e regrava no SQLite."""
+    print("[Atlas SQLite] Iniciando rebuild de séries categoria por categoria...")
     try:
-        data_list = await client.get_series()
+        categories = await client.get_series_categories()
         await db.execute("DELETE FROM series")
         
-        batch = []
         inserted_count = 0
-        while data_list:
-            s = data_list.pop()
-            name = s.get("name")
-            if name:
-                year_val = _extract_year(name)
-                if not year_val:
-                    year_campo = s.get("year")
-                    if year_campo and str(year_campo).strip() not in ("", "0", "None"):
-                        try:
-                            year_val = int(str(year_campo)[:4])
-                        except Exception:
-                            pass
-                batch.append((
-                    clean_title(name),
-                    s.get("series_id"),
-                    str(s.get("category_id", "")),
-                    name,
-                    year_val
-                ))
-                if len(batch) >= 1000:
-                    await db.executemany(
-                        "INSERT INTO series(clean_title, series_id, category_id, original_name, year) VALUES (?,?,?,?,?)",
-                        batch
-                    )
-                    inserted_count += len(batch)
-                    batch.clear()
-                    
-        if batch:
-            await db.executemany(
-                "INSERT INTO series(clean_title, series_id, category_id, original_name, year) VALUES (?,?,?,?,?)",
-                batch
-            )
-            inserted_count += len(batch)
-            batch.clear()
+        batch = []
+        
+        if not categories:
+            print("[Atlas SQLite] Nenhuma categoria de série encontrada, tentando carregar tudo de uma vez...")
+            data_list = await client.get_series()
+            while data_list:
+                s = data_list.pop()
+                name = s.get("name")
+                if name:
+                    year_val = _extract_year(name)
+                    if not year_val:
+                        year_campo = s.get("year")
+                        if year_campo and str(year_campo).strip() not in ("", "0", "None"):
+                            try:
+                                year_val = int(str(year_campo)[:4])
+                            except Exception:
+                                pass
+                    batch.append((
+                        clean_title(name),
+                        s.get("series_id"),
+                        str(s.get("category_id", "")),
+                        name,
+                        year_val
+                    ))
+                    if len(batch) >= 1000:
+                        await db.executemany(
+                            "INSERT INTO series(clean_title, series_id, category_id, original_name, year) VALUES (?,?,?,?,?)",
+                            batch
+                        )
+                        inserted_count += len(batch)
+                        batch.clear()
+            if batch:
+                await db.executemany(
+                    "INSERT INTO series(clean_title, series_id, category_id, original_name, year) VALUES (?,?,?,?,?)",
+                    batch
+                )
+                inserted_count += len(batch)
+                batch.clear()
+        else:
+            print(f"[Atlas SQLite] Processando {len(categories)} categorias de séries...")
+            for cat in categories:
+                cat_id = cat.get("category_id")
+                if not cat_id:
+                    continue
+                
+                data_list = await client.get_series(category_id=cat_id)
+                if not data_list:
+                    continue
+                
+                while data_list:
+                    s = data_list.pop()
+                    name = s.get("name")
+                    if name:
+                        year_val = _extract_year(name)
+                        if not year_val:
+                            year_campo = s.get("year")
+                            if year_campo and str(year_campo).strip() not in ("", "0", "None"):
+                                try:
+                                    year_val = int(str(year_campo)[:4])
+                                except Exception:
+                                    pass
+                        batch.append((
+                            clean_title(name),
+                            s.get("series_id"),
+                            str(s.get("category_id", "")),
+                            name,
+                            year_val
+                        ))
+                        if len(batch) >= 1000:
+                            await db.executemany(
+                                "INSERT INTO series(clean_title, series_id, category_id, original_name, year) VALUES (?,?,?,?,?)",
+                                batch
+                            )
+                            inserted_count += len(batch)
+                            batch.clear()
+                import gc; gc.collect()
+            
+            if batch:
+                await db.executemany(
+                    "INSERT INTO series(clean_title, series_id, category_id, original_name, year) VALUES (?,?,?,?,?)",
+                    batch
+                )
+                inserted_count += len(batch)
+                batch.clear()
 
         await db.execute("INSERT OR REPLACE INTO meta(key,value) VALUES ('series_updated', ?)", (str(time.time()),))
         await db.commit()
-        print(f"[Atlas SQLite] {inserted_count} séries salvas no SQLite.")
+        print(f"[Atlas SQLite] Rebuild concluído. {inserted_count} séries salvas no SQLite.")
     except Exception as e:
         print(f"[Atlas SQLite] Erro ao rebuild de séries: {e}")
 
