@@ -202,35 +202,11 @@ async def sequential_prewarm():
     except Exception as e:
         print(f"[STARTUP-PREWARM] Erro no pre-warm Hypex: {e}")
 
-    # 2. Atlas
-    try:
-        c_at = atlas.get_atlas_client()
-        if not c_at.autenticado:
-            await c_at.autenticar()
-        print("[STARTUP-PREWARM] Atlas: Reconstruindo catálogo de filmes...")
-        await atlas._background_rebuild(c_at, "movie")
-        import gc; gc.collect()
-        
-        print("[STARTUP-PREWARM] Atlas: Reconstruindo catálogo de séries...")
-        await atlas._background_rebuild(c_at, "series")
-        import gc; gc.collect()
-    except Exception as e:
-        print(f"[STARTUP-PREWARM] Erro no pre-warm Atlas: {e}")
+    # 2. Atlas (DESATIVADO PARA TESTES)
+    print("[STARTUP-PREWARM] Atlas desativado para testes.")
 
-    # 3. Figs
-    try:
-        c_fg = figs.get_figs_client()
-        if not c_fg.autenticado:
-            await c_fg.autenticar()
-        print("[STARTUP-PREWARM] Figs: Reconstruindo catálogo de filmes...")
-        await figs._background_rebuild(c_fg, "movie")
-        import gc; gc.collect()
-        
-        print("[STARTUP-PREWARM] Figs: Reconstruindo catálogo de séries...")
-        await figs._background_rebuild(c_fg, "series")
-        import gc; gc.collect()
-    except Exception as e:
-        print(f"[STARTUP-PREWARM] Erro no pre-warm Figs: {e}")
+    # 3. Figs (DESATIVADO PARA TESTES)
+    print("[STARTUP-PREWARM] Figs desativado para testes.")
 
     print("[STARTUP-PREWARM] Todos os pre-warms de catálogo concluídos sequencialmente!")
 
@@ -980,89 +956,11 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                 hypex.search_serve(titles, type, season, episode, cached_series_id=hypex_sid, year=year)
             )
 
-        # Atlas Integration
-        atlas_sid = entry.get("atlas_sid") if entry else None
-        at_flag = scraper_flags.get("atlas")
+        # Atlas Integration (DESATIVADO PARA TESTES)
+        novos_flags["atlas"] = "N"
 
-        if is_anime:
-            # Atlas não tem anime, bloqueamos diretamente
-            novos_flags["atlas"] = "N"
-        elif isinstance(at_flag, list):
-            title_name = titles[0] if titles else "Filme"
-            for item in at_flag:
-                if isinstance(item, dict) and item.get("url"):
-                    url = item["url"]
-                    qualidade = item.get("q", "HD")
-                    audio_char = item.get("a", "D")
-                    
-                    if audio_char == "L":
-                        audio_info = "Legendado"
-                    elif audio_char == "Dual":
-                        audio_info = "Dual Áudio"
-                    elif audio_char == "Nac":
-                        audio_info = "Nacional"
-                    else:
-                        audio_info = "Dublado"
-                    
-                    title_str = format_stream_title(title_name, type, season, episode, audio_info=audio_info)
-                    stream_obj = {
-                        "name": f"FenixFlix\n{qualidade}",
-                        "title": f"{title_str}\nAtlas",
-                        "url": url,
-                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-atlas"}
-                    }
-                    if isinstance(item, dict) and "headers" in item:
-                        stream_obj["headers"] = item["headers"]
-                    todos_streams.append(stream_obj)
-            novos_flags["atlas"] = at_flag
-        elif (type == "series" and atlas_sid == "N") or (type == "movie" and at_flag == "N"):
-            novos_flags["atlas"] = "N"
-        else:
-            outras_tarefas["atlas"] = asyncio.create_task(
-                atlas.search_serve(titles, type, season, episode, cached_series_id=atlas_sid, year=year)
-            )
-
-        # Figs Integration
-        figs_sid = entry.get("figs_sid") if entry else None
-        fg_flag = scraper_flags.get("figs")
-
-        if is_anime:
-            # Figs não tem anime, bloqueamos diretamente
-            novos_flags["figs"] = "N"
-        elif isinstance(fg_flag, list):
-            title_name = titles[0] if titles else "Filme"
-            for item in fg_flag:
-                if isinstance(item, dict) and item.get("url"):
-                    url = item["url"]
-                    qualidade = item.get("q", "HD")
-                    audio_char = item.get("a", "D")
-                    
-                    if audio_char == "L":
-                        audio_info = "Legendado"
-                    elif audio_char == "Dual":
-                        audio_info = "Dual Áudio"
-                    elif audio_char == "Nac":
-                        audio_info = "Nacional"
-                    else:
-                        audio_info = "Dublado"
-                    
-                    title_str = format_stream_title(title_name, type, season, episode, audio_info=audio_info)
-                    stream_obj = {
-                        "name": f"FenixFlix\n{qualidade}",
-                        "title": f"{title_str}\nFiggs",
-                        "url": url,
-                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-figs"}
-                    }
-                    if isinstance(item, dict) and "headers" in item:
-                        stream_obj["headers"] = item["headers"]
-                    todos_streams.append(stream_obj)
-            novos_flags["figs"] = fg_flag
-        elif (type == "series" and figs_sid == "N") or (type == "movie" and fg_flag == "N"):
-            novos_flags["figs"] = "N"
-        else:
-            outras_tarefas["figs"] = asyncio.create_task(
-                figs.search_serve(titles, type, season, episode, cached_series_id=figs_sid, year=year)
-            )
+        # Figs Integration (DESATIVADO PARA TESTES)
+        novos_flags["figs"] = "N"
 
         # Next Integration (NexEmbed)
         next_flag = scraper_flags.get("next")
