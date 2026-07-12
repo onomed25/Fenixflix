@@ -28,7 +28,7 @@ import on
 import hypex
 import atlas
 import figs
-from next import resolve_nexembed
+from nexembed import resolve_nexembed
 
 # Pré-calculados no startup para evitar reflexão a cada request
 _SERVE_HAS_TITLES = False
