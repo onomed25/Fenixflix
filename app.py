@@ -17,18 +17,26 @@ import orjson
 import uvicorn
 import aiofiles
 import re
+import inspect
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 from datetime import datetime, date
 import serve
-import mywallpaper
+
 import on
-import net
+import hypex
+import atlas
+import figs
+from next import resolve_nexembed
+
+# Pré-calculados no startup para evitar reflexão a cada request
+_SERVE_HAS_TITLES = False
+_ON_HAS_TITLES    = False
 
 load_dotenv()
 
-VERSION = "1.0.5"
+VERSION = "1.0.6"
 CACHE_DIR = "cache"
 CATALOG_CACHE_TIME = 6 * 60 * 60
 POPULAR_CACHE_TIME = 24 * 60 * 60
@@ -48,7 +56,7 @@ GLOBAL_SCRAPER_CACHE = None
 CACHE_LOCK = asyncio.Lock()
 _CACHE_DIRTY = False
 
-def load_scraper_cache():
+async def load_scraper_cache():
     global GLOBAL_SCRAPER_CACHE
 
     if GLOBAL_SCRAPER_CACHE is not None:
@@ -56,8 +64,9 @@ def load_scraper_cache():
 
     if os.path.exists(SCRAPER_STATUS_FILE):
         try:
-            with open(SCRAPER_STATUS_FILE, "rb") as f:
-                GLOBAL_SCRAPER_CACHE = orjson.loads(f.read())
+            async with aiofiles.open(SCRAPER_STATUS_FILE, "rb") as f:
+                data = await f.read()
+                GLOBAL_SCRAPER_CACHE = orjson.loads(data)
                 return GLOBAL_SCRAPER_CACHE
         except Exception as e:
             print(f"[CACHE ERROR] Falha ao ler scrapers_status.json: {e}")
@@ -121,7 +130,7 @@ async def _resolve_popular_item(tmdb_id: str, content_type: str):
     return None
 
 async def sync_scraper_cache_from_items(items: list, content_type: str):
-    scraper_cache = load_scraper_cache()
+    scraper_cache = await load_scraper_cache()
 
     known_tmdb_ids = {v.get("tmdb_id") for v in scraper_cache.values() if v.get("tmdb_id")}
 
@@ -189,10 +198,47 @@ async def lifespan(app: FastAPI):
         verify=False,
     )
 
+    # Pré-calcula assinaturas de função (evita reflexão cara a cada request)
+    global _SERVE_HAS_TITLES, _ON_HAS_TITLES
+    _SERVE_HAS_TITLES = "titles" in inspect.signature(serve.search_serve).parameters
+    _ON_HAS_TITLES    = "titles" in inspect.signature(on.search_serve).parameters
+
     # Inicia a task de gravação em background
     task_writer = asyncio.create_task(background_cache_writer())
 
     await prepopulate_scraper_cache_from_popular()
+
+    # Pre-warm: agenda rebuild do catálogo HypEx em background no startup
+    # para que o primeiro request já encontre dados prontos no SQLite
+    try:
+        c = hypex.get_hypex_client()
+        if not c.autenticado:
+            await c.autenticar()
+        asyncio.create_task(hypex._ensure_catalog(c, "movie"))
+        asyncio.create_task(hypex._ensure_catalog(c, "series"))
+        print("[STARTUP] Pre-warm do catálogo HypEx agendado em background.")
+    except Exception as e:
+        print(f"[STARTUP] Aviso: não foi possível pre-warm HypEx: {e}")
+
+    try:
+        c_at = atlas.get_atlas_client()
+        if not c_at.autenticado:
+            await c_at.autenticar()
+        asyncio.create_task(atlas._ensure_catalog(c_at, "movie"))
+        asyncio.create_task(atlas._ensure_catalog(c_at, "series"))
+        print("[STARTUP] Pre-warm do catálogo Atlas agendado em background.")
+    except Exception as e:
+        print(f"[STARTUP] Aviso: não foi possível pre-warm Atlas: {e}")
+
+    try:
+        c_fg = figs.get_figs_client()
+        if not c_fg.autenticado:
+            await c_fg.autenticar()
+        asyncio.create_task(figs._ensure_catalog(c_fg, "movie"))
+        asyncio.create_task(figs._ensure_catalog(c_fg, "series"))
+        print("[STARTUP] Pre-warm do catálogo Figs agendado em background.")
+    except Exception as e:
+        print(f"[STARTUP] Aviso: não foi possível pre-warm Figs: {e}")
 
     yield
 
@@ -223,14 +269,24 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+_TMDB_CACHE = {}
+_TMDB_CACHE_TTL = 7200  # 2 horas em segundos
+
 async def obter_dados_base_tmdb(imdb_id: str, content_type: str, client: httpx.AsyncClient = None):
+    cache_key = f"{imdb_id}_{content_type}"
+    cached = _TMDB_CACHE.get(cache_key)
+    if cached and (time.time() - cached['time']) < _TMDB_CACHE_TTL:
+        return cached['data']
+
     tmdb_id_final = None
     real_imdb_id  = None
     titulos = []
+    is_anime = False
+    year = None
     tmdb_type = "movie" if content_type == "movie" else "tv"
 
     async def _do_requests(c):
-        nonlocal tmdb_id_final, real_imdb_id
+        nonlocal tmdb_id_final, real_imdb_id, is_anime, year
         if imdb_id.startswith("tmdb:"):
             tmdb_id_final = imdb_id.split(":")[1]
             url_pt = f"https://api.themoviedb.org/3/{tmdb_type}/{tmdb_id_final}?api_key={TMDB_API_KEY}&language=pt-BR&append_to_response=external_ids"
@@ -244,6 +300,14 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str, client: httpx.A
                     name = data.get("title") or data.get("name")
                     if name and name not in titulos:
                         titulos.append(name)
+                    lang = data.get("original_language", "")
+                    genres = [g.get("id") for g in data.get("genres", [])] if data.get("genres") else []
+                    if lang in ["ja", "ko", "zh"] and 16 in genres:
+                        is_anime = True
+                    if not year:
+                        date_str = data.get("release_date") or data.get("first_air_date")
+                        if date_str and len(date_str) >= 4:
+                            year = date_str[:4]
         else:
             real_imdb_id = imdb_id
             url_pt = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=pt-BR"
@@ -259,6 +323,14 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str, client: httpx.A
                         name = results[0].get("title") or results[0].get("name")
                         if name and name not in titulos:
                             titulos.append(name)
+                        lang = results[0].get("original_language", "")
+                        genres = results[0].get("genre_ids", [])
+                        if lang in ["ja", "ko", "zh"] and 16 in genres:
+                            is_anime = True
+                        if not year:
+                            date_str = results[0].get("release_date") or results[0].get("first_air_date")
+                            if date_str and len(date_str) >= 4:
+                                year = date_str[:4]
 
     try:
         await _do_requests(client or _http_client)
@@ -270,7 +342,9 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str, client: httpx.A
         except Exception as e2:
             pass
 
-    return tmdb_id_final, real_imdb_id, titulos
+    resultado = (tmdb_id_final, real_imdb_id, titulos, is_anime, year)
+    _TMDB_CACHE[cache_key] = {'time': time.time(), 'data': resultado}
+    return resultado
 
 async def fetch_tmdb_meta_ptbr(item_id: str, content_type: str):
     async with tmdb_semaphore:
@@ -495,7 +569,7 @@ async def get_populares_fenix_cached(content_type: str):
 
     # Ordenar por visualizações de forma decrescente
     vistos = sorted(vistos, key=lambda x: x.get("v", 0), reverse=True)
-    scraper_cache = load_scraper_cache()
+    scraper_cache = await load_scraper_cache()
 
     ids_to_resolve = []
     for item in vistos:
@@ -561,15 +635,15 @@ async def get_populares_fenix_cached(content_type: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    manifest_data = {"name": "FENIXFLIX", "description": "Addon de filmes e séries dublados e legendados em Português (PT‑BR)", "types": ["movie", "series"]}
+    manifest_data = {"name": "FENIXFLIX", "description": "Addon de filmes, séries e Animes dublados e legendados em Português (PT‑BR)", "types": ["movie", "series"]}
     return templates.TemplateResponse(request=request, name="index.html", context={"manifest": manifest_data, "version": VERSION})
 
 @app.get("/manifest.json")
 async def manifest_endpoint():
     return JSONResponse(content={
         "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
-        "description": "Addon de filmes e séries dublados e legendados em Português (PT‑BR)",
-        "logo": "https://i.imgur.com/9SKgxfU.png",
+        "description": "Addon de filmes, séries e Animes dublados e legendados em Português (PT‑BR)",
+        "logo": "https://i.imgur.com/e6skOZ8.png",
         "background": "https://dl.strem.io/addon-background.jpg",
         "resources": ["stream", "catalog"],
         "types": ["movie", "series"],
@@ -601,26 +675,52 @@ async def catalog_endpoint(type: str, id: str, extra: str = None, skip: int = 0)
     return JSONResponse(content={"metas": []})
 
 async def enviar_pedido_background(url: str):
+    """Reutiliza o client HTTP global em vez de criar/fechar um novo a cada chamada."""
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FenixFlixAddon/1.0"}
-        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
-            response = await client.get(url, headers=headers)
-            print(f"[AUTO-PEDIDO] Pedido enviado para {url} - Status: {response.status_code}")
+        response = await _http_client.get(url, headers=headers, timeout=10.0)
+        print(f"[AUTO-PEDIDO] Pedido enviado para {url} - Status: {response.status_code}")
     except Exception as e:
         print(f"[AUTO-PEDIDO] Erro ao enviar pedido automático: {e}")
 
 async def atualizar_cache_e_pedido(
     base_id, tmdb_id, titles, type, novos_flags, outras_tarefas,
-    pending_names, mywallpaper_teve_resultados, season, episode,
-    imdb_id_for_request, len_todos_streams
+    pending_names, season, episode,
+    imdb_id_for_request, len_todos_streams, is_anime=False, year=None
 ):
     try:
-        cache_status = load_scraper_cache()
+        cache_status = await load_scraper_cache()
         cache_mudou = False
 
         if base_id not in cache_status:
-            cache_status[base_id] = {"tmdb_id": tmdb_id, "titles": titles, "type": type}
+            cache_status[base_id] = {"tmdb_id": tmdb_id, "titles": titles, "type": type, "is_anime": is_anime, "year": year}
             cache_mudou = True
+        else:
+            if "is_anime" not in cache_status[base_id]:
+                cache_status[base_id]["is_anime"] = is_anime
+                cache_mudou = True
+            if "year" not in cache_status[base_id] and year:
+                cache_status[base_id]["year"] = year
+                cache_mudou = True
+
+
+        hyp_sid = novos_flags.pop("hypex_sid", None)
+        if hyp_sid:
+            if cache_status[base_id].get("hypex_sid") != hyp_sid:
+                cache_status[base_id]["hypex_sid"] = hyp_sid
+                cache_mudou = True
+
+        at_sid = novos_flags.pop("atlas_sid", None)
+        if at_sid:
+            if cache_status[base_id].get("atlas_sid") != at_sid:
+                cache_status[base_id]["atlas_sid"] = at_sid
+                cache_mudou = True
+
+        fg_sid = novos_flags.pop("figs_sid", None)
+        if fg_sid:
+            if cache_status[base_id].get("figs_sid") != fg_sid:
+                cache_status[base_id]["figs_sid"] = fg_sid
+                cache_mudou = True
 
         episodes_backup = cache_status[base_id].pop("episodes", None)
         scrapers_backup = cache_status[base_id].pop("scrapers", None)
@@ -630,17 +730,7 @@ async def atualizar_cache_e_pedido(
             cache_status[base_id]["doramogo_slug"] = slug_novo
             cache_mudou = True
 
-        if "mywallpaper" in outras_tarefas and mywallpaper_teve_resultados is not None:
-            mw_atual = cache_status[base_id].get("mywallpaper_global")
-            is_mw_pending = "mywallpaper" in pending_names
-            if not mywallpaper_teve_resultados and not is_mw_pending:
-                if mw_atual != "N":
-                    cache_status[base_id]["mywallpaper_global"] = "N"
-                    cache_mudou = True
-            elif not is_mw_pending:
-                if mw_atual != "S":
-                    cache_status[base_id]["mywallpaper_global"] = "S"
-                    cache_mudou = True
+
 
         if tmdb_id and type == "series":
             if episodes_backup is None:
@@ -679,7 +769,7 @@ async def atualizar_cache_e_pedido(
             if type == "series" and season is not None and episode is not None:
                 episode_suffix = f"&episode=T{season:02d}EP{episode:02d}"
 
-            base_server = SERVE_ or "https://fenixflix-2ymu.onrender.com"
+            base_server = SERVE_
             base_server = base_server.rstrip('/')
             pedidos_url = f"{base_server}/api/pedidos?id={imdb_id_for_request}&type={type}{episode_suffix}"
 
@@ -687,6 +777,51 @@ async def atualizar_cache_e_pedido(
     except Exception as e:
         print(f"[BACKGROUND TASK ERROR] Erro na atualização do cache ou pedido: {e}")
 
+
+async def resolve_redirect(url: str, client: httpx.AsyncClient) -> str:
+    if not url or not url.startswith("http"):
+        return url
+    
+    # Bypass para domínios rápidos e que não bloqueiam via Cloudflare, e também arquivos diretos
+    bypass_domains = ["koyeb.app", "localhost", "127.0.0.1", "fenixflix", "mediafire.com", "r2.dev", "google", "drive"]
+    if any(domain in url for domain in bypass_domains) or url.endswith(('.mp4', '.mkv', '.m3u8')):
+        return url
+    
+    current_url = url
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "*/*"
+    }
+    
+    try:
+        for _ in range(2):
+            r = await client.head(current_url, headers=headers, follow_redirects=False, timeout=1.5)
+            if r.status_code in (301, 302, 303, 307, 308):
+                location = r.headers.get("location")
+                if not location:
+                    break
+                if location.startswith("/"):
+                    from urllib.parse import urljoin
+                    current_url = urljoin(current_url, location)
+                else:
+                    current_url = location
+            else:
+                break
+    except Exception as e:
+        print(f"[Redirect Resolver] Erro ao resolver {url}: {e}")
+    return current_url
+
+def format_stream_title(title_name: str, content_type: str, season=None, episode=None, audio_info: str = "Dublado") -> str:
+    lines = [title_name]
+    if content_type == "series" and season is not None and episode is not None:
+        try:
+            s_pad = f"{int(season):02d}"
+            e_pad = f"{int(episode):02d}"
+            lines.append(f"T{s_pad} EP{e_pad}")
+        except Exception:
+            lines.append(f"T{season} EP{episode}")
+    lines.append(audio_info)
+    return "\n".join(lines)
 
 @app.get("/stream/{type}/{id}.json")
 @limiter.limit("30/minute")
@@ -703,7 +838,7 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
         if type == 'series' and len(parts) >= 3:
             season, episode = int(parts[1]), int(parts[2])
 
-    cache_status = load_scraper_cache()
+    cache_status = await load_scraper_cache()
     entry = cache_status.get(clean_id)
     base_id = clean_id
 
@@ -715,9 +850,12 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                 base_id = key
                 break
 
-    if entry and entry.get("tmdb_id"):
+    year = None
+    if entry and entry.get("tmdb_id") and "is_anime" in entry:
         tmdb_id = entry.get("tmdb_id")
         titles  = entry.get("titles", [])
+        is_anime = entry.get("is_anime", False)
+        year = entry.get("year")
 
         if type == "series":
             scraper_flags = entry.get("episodes", {}).get(f"{season}:{episode}", {})
@@ -726,26 +864,29 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
         else:
             scraper_flags = entry.get("scrapers", {})
     else:
-        tmdb_id, real_imdb_id, titles = await obter_dados_base_tmdb(clean_id, type, client=_http_client)
+        tmdb_id, real_imdb_id, titles, is_anime, year = await obter_dados_base_tmdb(clean_id, type, client=_http_client)
         scraper_flags = {}
         if real_imdb_id and real_imdb_id.startswith("tt"):
             base_id = real_imdb_id
         else:
             base_id = clean_id
 
-    import inspect
+    imdb_id = base_id if (base_id and base_id.startswith("tt")) else (clean_id if (clean_id and clean_id.startswith("tt")) else None)
+    todos_streams = []
 
-    # Resolve serve.search_serve signature dynamically
-    kwargs_serve = {}
-    if "titles" in inspect.signature(serve.search_serve).parameters:
-        kwargs_serve["titles"] = titles
+    # Usa flags pré-calculados no startup (sem reflexão a cada request)
+    kwargs_serve = {"titles": titles} if _SERVE_HAS_TITLES else {}
 
-    tarefa_serve = asyncio.create_task(
-        serve.search_serve(clean_id, type, season, episode, client=_serve_client, **kwargs_serve)
-    )
-
-    outras_tarefas = {}
     novos_flags = scraper_flags.copy()
+    outras_tarefas = {}
+
+    serve_flag = scraper_flags.get("serve")
+    if serve_flag == "N":
+        novos_flags["serve"] = "N"
+    else:
+        outras_tarefas["serve"] = asyncio.create_task(
+            serve.search_serve(clean_id, type, season, episode, client=_serve_client, **kwargs_serve)
+        )
 
     if tmdb_id:
         on_flag = scraper_flags.get("on")
@@ -764,47 +905,179 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                     else:
                         on_cache[k] = v
 
-            kwargs_on = {}
-            if "titles" in inspect.signature(on.search_serve).parameters:
-                kwargs_on["titles"] = titles
+            kwargs_on = {"titles": titles} if _ON_HAS_TITLES else {}
             outras_tarefas["on"] = asyncio.create_task(
                 on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache, **kwargs_on)
             )
 
-        mw_flag_salva = cache_status.get(base_id, {}).get("mywallpaper_global")
 
-        if mw_flag_salva == "N":
-            novos_flags["mywallpaper"] = "N"
-        elif scraper_flags.get("mywallpaper") != "N":
-            outras_tarefas["mywallpaper"] = asyncio.create_task(
-                mywallpaper.search_serve(tmdb_id, titles, type, season, episode, client=_http_client)
-            )
 
-        net_flag = scraper_flags.get("net")
-        if net_flag == "N":
-            novos_flags["net"] = "N"
+
+
+        # Hypex Integration
+        hypex_sid = entry.get("hypex_sid") if entry else None
+        hx_flag = scraper_flags.get("hypex")
+
+        if is_anime:
+            # Hypex não tem anime, bloqueamos diretamente
+            novos_flags["hypex"] = "N"
+        elif isinstance(hx_flag, list):
+            title_name = titles[0] if titles else "Filme"
+            for item in hx_flag:
+                if isinstance(item, dict) and item.get("url"):
+                    url = item["url"]
+                    qualidade = item.get("q", "HD")
+                    audio_char = item.get("a", "D")
+                    
+                    if audio_char == "L":
+                        audio_info = "Legendado"
+                    elif audio_char == "Dual":
+                        audio_info = "Dual Áudio"
+                    elif audio_char == "Nac":
+                        audio_info = "Nacional"
+                    else:
+                        audio_info = "Dublado"
+                    
+                    title_str = format_stream_title(title_name, type, season, episode, audio_info=audio_info)
+                    stream_obj = {
+                        "name": f"FenixFlix\n{qualidade}",
+                        "title": f"{title_str}\nHypex",
+                        "url": url,
+                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-hypex"}
+                    }
+                    if isinstance(item, dict) and "headers" in item:
+                        stream_obj["headers"] = item["headers"]
+                    todos_streams.append(stream_obj)
+            novos_flags["hypex"] = hx_flag
+        elif (type == "series" and hypex_sid == "N") or (type == "movie" and hx_flag == "N"):
+            novos_flags["hypex"] = "N"
         else:
-            kwargs_net = {}
-            if "titles" in inspect.signature(net.search_serve).parameters:
-                kwargs_net["titles"] = titles
-            outras_tarefas["net"] = asyncio.create_task(
-                net.search_serve(tmdb_id, type, season, episode, client=_http_client, **kwargs_net)
+            outras_tarefas["hypex"] = asyncio.create_task(
+                hypex.search_serve(titles, type, season, episode, cached_series_id=hypex_sid, year=year)
             )
 
-    tarefas_ativas = {"serve": tarefa_serve}
+        # Atlas Integration
+        atlas_sid = entry.get("atlas_sid") if entry else None
+        at_flag = scraper_flags.get("atlas")
+
+        if is_anime:
+            # Atlas não tem anime, bloqueamos diretamente
+            novos_flags["atlas"] = "N"
+        elif isinstance(at_flag, list):
+            title_name = titles[0] if titles else "Filme"
+            for item in at_flag:
+                if isinstance(item, dict) and item.get("url"):
+                    url = item["url"]
+                    qualidade = item.get("q", "HD")
+                    audio_char = item.get("a", "D")
+                    
+                    if audio_char == "L":
+                        audio_info = "Legendado"
+                    elif audio_char == "Dual":
+                        audio_info = "Dual Áudio"
+                    elif audio_char == "Nac":
+                        audio_info = "Nacional"
+                    else:
+                        audio_info = "Dublado"
+                    
+                    title_str = format_stream_title(title_name, type, season, episode, audio_info=audio_info)
+                    stream_obj = {
+                        "name": f"FenixFlix\n{qualidade}",
+                        "title": f"{title_str}\nAtlas",
+                        "url": url,
+                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-atlas"}
+                    }
+                    if isinstance(item, dict) and "headers" in item:
+                        stream_obj["headers"] = item["headers"]
+                    todos_streams.append(stream_obj)
+            novos_flags["atlas"] = at_flag
+        elif (type == "series" and atlas_sid == "N") or (type == "movie" and at_flag == "N"):
+            novos_flags["atlas"] = "N"
+        else:
+            outras_tarefas["atlas"] = asyncio.create_task(
+                atlas.search_serve(titles, type, season, episode, cached_series_id=atlas_sid, year=year)
+            )
+
+        # Figs Integration
+        figs_sid = entry.get("figs_sid") if entry else None
+        fg_flag = scraper_flags.get("figs")
+
+        if is_anime:
+            # Figs não tem anime, bloqueamos diretamente
+            novos_flags["figs"] = "N"
+        elif isinstance(fg_flag, list):
+            title_name = titles[0] if titles else "Filme"
+            for item in fg_flag:
+                if isinstance(item, dict) and item.get("url"):
+                    url = item["url"]
+                    qualidade = item.get("q", "HD")
+                    audio_char = item.get("a", "D")
+                    
+                    if audio_char == "L":
+                        audio_info = "Legendado"
+                    elif audio_char == "Dual":
+                        audio_info = "Dual Áudio"
+                    elif audio_char == "Nac":
+                        audio_info = "Nacional"
+                    else:
+                        audio_info = "Dublado"
+                    
+                    title_str = format_stream_title(title_name, type, season, episode, audio_info=audio_info)
+                    stream_obj = {
+                        "name": f"FenixFlix\n{qualidade}",
+                        "title": f"{title_str}\nFiggs",
+                        "url": url,
+                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-figs"}
+                    }
+                    if isinstance(item, dict) and "headers" in item:
+                        stream_obj["headers"] = item["headers"]
+                    todos_streams.append(stream_obj)
+            novos_flags["figs"] = fg_flag
+        elif (type == "series" and figs_sid == "N") or (type == "movie" and fg_flag == "N"):
+            novos_flags["figs"] = "N"
+        else:
+            outras_tarefas["figs"] = asyncio.create_task(
+                figs.search_serve(titles, type, season, episode, cached_series_id=figs_sid, year=year)
+            )
+
+        # Next Integration (NexEmbed)
+        next_flag = scraper_flags.get("next")
+        if next_flag and isinstance(next_flag, str) and next_flag.startswith("http"):
+            # A URL do player está no cache. Vamos resolvê-la em tempo real para obter o m3u8 fresco.
+            outras_tarefas["next"] = asyncio.create_task(
+                resolve_nexembed(
+                    client=_http_client,
+                    player_url=next_flag
+                )
+            )
+        elif next_flag == "N":
+            novos_flags["next"] = "N"
+        elif imdb_id or tmdb_id:
+            outras_tarefas["next"] = asyncio.create_task(
+                resolve_nexembed(
+                    imdb_id=imdb_id,
+                    tmdb_id=tmdb_id,
+                    content_type=type,
+                    season=season,
+                    episode=episode,
+                    client=_http_client
+                )
+            )
+
+    tarefas_ativas = {}
     tarefas_ativas.update(outras_tarefas)
 
-    # Espera até 12 segundos para não sofrer timeout silencioso no Stremio
-    done, pending = await asyncio.wait(
-        tarefas_ativas.values(),
-        timeout=32.0
-    )
+    pending = set()
+    if tarefas_ativas:
+        # Espera até 12 segundos para não sofrer timeout silencioso no Stremio
+        done, pending = await asyncio.wait(
+            tarefas_ativas.values(),
+            timeout=12.0
+        )
 
-    for p in pending:
-        p.cancel()
+        for p in pending:
+            p.cancel()
 
-    todos_streams = []
-    mywallpaper_teve_resultados = False
 
     for nome, tarefa in tarefas_ativas.items():
         if tarefa in pending:
@@ -816,14 +1089,10 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
             res = None
 
         if not res:
-            if nome != "serve":
-                novos_flags[nome] = "N"
+            novos_flags[nome] = "N"
             continue
 
-        if nome == "mywallpaper" and isinstance(res, list) and len(res) > 0:
-            mywallpaper_teve_resultados = True
-
-        elif nome == "on":
+        if nome == "on":
             on_dict = {}
             for s in res:
                 if isinstance(s, dict) and s.get("_cache_key"):
@@ -837,7 +1106,164 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
 
             novos_flags[nome] = on_dict if on_dict else "S"
 
-        elif nome != "serve":
+
+        elif nome == "hypex":
+            sid_found = None
+            has_streams = False
+            for s in res:
+                if isinstance(s, dict):
+                    if "_hypex_series_id" in s:
+                        sid_found = s["_hypex_series_id"]
+                    if s.get("url"):
+                        has_streams = True
+            if sid_found:
+                novos_flags["hypex_sid"] = sid_found
+            
+            if has_streams:
+                novos_flags["hypex"] = []
+                for s in res:
+                    if isinstance(s, dict) and s.get("url"):
+                        q_match = re.search(r'FenixFlix\n(.*)', s["name"])
+                        q_val = q_match.group(1) if q_match else "HD"
+                        
+                        title_lines = [line.strip() for line in s["title"].split("\n") if line.strip()]
+                        audio_info = "Dublado"
+                        for line in title_lines:
+                            if line in ["Legendado", "Dual Áudio", "Nacional", "Dublado"]:
+                                audio_info = line
+                                break
+                        
+                        if audio_info == "Legendado":
+                            a_val = "L"
+                        elif audio_info == "Dual Áudio":
+                            a_val = "Dual"
+                        elif audio_info == "Nacional":
+                            a_val = "Nac"
+                        else:
+                            a_val = "D"
+                            
+                        entry = {
+                            "url": s["url"],
+                            "q": q_val,
+                            "a": a_val
+                        }
+                        if "headers" in s:
+                            entry["headers"] = s["headers"]
+                        novos_flags["hypex"].append(entry)
+            else:
+                novos_flags["hypex"] = "N"
+
+        elif nome == "atlas":
+            sid_found = None
+            has_streams = False
+            for s in res:
+                if isinstance(s, dict):
+                    if "_atlas_series_id" in s:
+                        sid_found = s["_atlas_series_id"]
+                    if s.get("url"):
+                        has_streams = True
+            if sid_found:
+                novos_flags["atlas_sid"] = sid_found
+            
+            if has_streams:
+                novos_flags["atlas"] = []
+                for s in res:
+                    if isinstance(s, dict) and s.get("url"):
+                        q_match = re.search(r'FenixFlix\n(.*)', s["name"])
+                        q_val = q_match.group(1) if q_match else "HD"
+                        
+                        title_lines = [line.strip() for line in s["title"].split("\n") if line.strip()]
+                        audio_info = "Dublado"
+                        for line in title_lines:
+                            if line in ["Legendado", "Dual Áudio", "Nacional", "Dublado"]:
+                                audio_info = line
+                                break
+                        
+                        if audio_info == "Legendado":
+                            a_val = "L"
+                        elif audio_info == "Dual Áudio":
+                            a_val = "Dual"
+                        elif audio_info == "Nacional":
+                            a_val = "Nac"
+                        else:
+                            a_val = "D"
+                            
+                        entry = {
+                            "url": s["url"],
+                            "q": q_val,
+                            "a": a_val
+                        }
+                        if "headers" in s:
+                            entry["headers"] = s["headers"]
+                        novos_flags["atlas"].append(entry)
+            else:
+                novos_flags["atlas"] = "N"
+
+        elif nome == "figs":
+            sid_found = None
+            has_streams = False
+            for s in res:
+                if isinstance(s, dict):
+                    if "_figs_series_id" in s:
+                        sid_found = s["_figs_series_id"]
+                    if s.get("url"):
+                        has_streams = True
+            if sid_found:
+                novos_flags["figs_sid"] = sid_found
+            
+            if has_streams:
+                novos_flags["figs"] = []
+                for s in res:
+                    if isinstance(s, dict) and s.get("url"):
+                        q_match = re.search(r'FenixFlix\n(.*)', s["name"])
+                        q_val = q_match.group(1) if q_match else "HD"
+                        
+                        title_lines = [line.strip() for line in s["title"].split("\n") if line.strip()]
+                        audio_info = "Dublado"
+                        for line in title_lines:
+                            if line in ["Legendado", "Dual Áudio", "Nacional", "Dublado"]:
+                                audio_info = line
+                                break
+                        
+                        if audio_info == "Legendado":
+                            a_val = "L"
+                        elif audio_info == "Dual Áudio":
+                            a_val = "Dual"
+                        elif audio_info == "Nacional":
+                            a_val = "Nac"
+                        else:
+                            a_val = "D"
+                            
+                        entry = {
+                            "url": s["url"],
+                            "q": q_val,
+                            "a": a_val
+                        }
+                        if "headers" in s:
+                            entry["headers"] = s["headers"]
+                        novos_flags["figs"].append(entry)
+            else:
+                novos_flags["figs"] = "N"
+
+        elif nome == "next":
+            if res and isinstance(res, tuple) and len(res) == 2:
+                p_url, s_link = res
+                if p_url and s_link:
+                    title_name = titles[0] if titles else "Filme"
+                    title_str = format_stream_title(title_name, type, season, episode, audio_info="Dublado")
+                    s_info = {
+                        "name": "FenixFlix\n720p",
+                        "title": f"{title_str}\nNext",
+                        "url": s_link,
+                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-next"}
+                    }
+                    todos_streams.append(s_info)
+                    novos_flags["next"] = p_url
+                    continue
+            novos_flags["next"] = "N"
+            continue
+
+        else:
             novos_flags[nome] = "S"
 
         for s_info in res:
@@ -846,6 +1272,9 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                 s_info.pop("_mediafire_url", None)
                 s_info.pop("_label", None)
                 s_info.pop("_cache_key", None)
+                s_info.pop("_hypex_series_id", None)
+                s_info.pop("_atlas_series_id", None)
+                s_info.pop("_figs_series_id", None)
 
                 if "behaviorHints" not in s_info:
                     s_info["behaviorHints"] = {"notWebReady": False, "bingeGroup": "fenixflix"}
@@ -865,6 +1294,45 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
     else:
         imdb_id_for_request = clean_id
 
+    bad_original_urls = set()
+    resolved_streams = []
+
+    # Resolver todos os redirecionamentos em paralelo antes de entregar ao Stremio
+    if todos_streams:
+        tasks = []
+        for s in todos_streams:
+            if s.get("url"):
+                tasks.append(resolve_redirect(s["url"], _http_client))
+            else:
+                tasks.append(asyncio.sleep(0, s.get("url")))
+        
+        resolved_urls = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for s, r_url in zip(todos_streams, resolved_urls):
+            if isinstance(r_url, str):
+                if "cloudflare-terms-of-service-abuse" in r_url:
+                    if s.get("url"):
+                        bad_original_urls.add(s["url"])
+                    if s.get("behaviorHints", {}).get("bingeGroup") == "fenixflix-next":
+                        novos_flags["next"] = "N"
+                    continue
+                if r_url.startswith("http"):
+                    s["url"] = r_url
+            resolved_streams.append(s)
+    else:
+        resolved_streams = todos_streams
+
+    # Filtrar novos_flags para não salvar URLs bloqueadas pela Cloudflare no cache
+    if bad_original_urls:
+        for key, val in list(novos_flags.items()):
+            if isinstance(val, list):
+                novos_flags[key] = [
+                    item for item in val
+                    if not (isinstance(item, dict) and item.get("url") in bad_original_urls)
+                ]
+            elif isinstance(val, str) and val in bad_original_urls:
+                novos_flags[key] = "N"
+
     background_tasks.add_task(
         atualizar_cache_e_pedido,
         base_id=base_id,
@@ -874,14 +1342,27 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
         novos_flags=novos_flags,
         outras_tarefas=list(outras_tarefas.keys()),
         pending_names=pending_names,
-        mywallpaper_teve_resultados=mywallpaper_teve_resultados,
+
         season=season,
         episode=episode,
         imdb_id_for_request=imdb_id_for_request,
-        len_todos_streams=len(todos_streams)
+        len_todos_streams=len(resolved_streams),
+        is_anime=is_anime,
+        year=year
     )
 
-    return JSONResponse(content={"streams": todos_streams})
+    # Ordenar para que os streams do servidor principal ("FenixFlix" / fenixflix-serve) fiquem sempre em primeiro
+    if resolved_streams:
+        serve_streams = []
+        other_streams = []
+        for s in resolved_streams:
+            if isinstance(s, dict) and s.get("behaviorHints", {}).get("bingeGroup") == "fenixflix-serve":
+                serve_streams.append(s)
+            else:
+                other_streams.append(s)
+        resolved_streams = serve_streams + other_streams
+
+    return JSONResponse(content={"streams": resolved_streams, "cacheMaxAge": 3600})
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
