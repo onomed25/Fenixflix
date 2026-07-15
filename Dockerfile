@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y curl && \
 # Instala dependências do Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instala dependências do Node.js (ex: sqlite3 para o HFA)
-RUN npm install
+# Instala dependências do Node.js explicitamente para não depender do package.json estar no Github
+RUN npm install sqlite3 dotenv
 
 EXPOSE 8000
 
