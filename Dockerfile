@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y curl && \
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Instala dependências do Node.js explicitamente para não depender do package.json estar no Github
-RUN npm install sqlite3 dotenv
+RUN npm install sqlite3 dotenv JSONStream
 
 EXPOSE 8000
 

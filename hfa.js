@@ -11,6 +11,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const sqlite3 = require('sqlite3');
+const JSONStream = require('JSONStream');
+const http = require('http');
+const https = require('https');
 
 const USER_AGENT = 'VLC/3.0.18 LibVLC/3.0.18';
 const CACHE_DIR = path.join(__dirname, 'cache');
@@ -266,18 +269,40 @@ class XtreamClient {
     }
 
     async getVodCategories() { return (await this._fetch({ action: 'get_vod_categories' }, 30000)) || []; }
-    async getVodStreams(categoryId) {
+    async getSeriesCategories() { return (await this._fetch({ action: 'get_series_categories' }, 30000)) || []; }
+    async getSeriesInfo(seriesId) { return (await this._fetch({ action: 'get_series_info', series_id: String(seriesId) }, 30000)) || {}; }
+
+    async _streamApi(params) {
+        if (!this.enabled) return null;
+        const allParams = { username: this.username, password: this.password, ...params };
+        const url = `${this.baseUrl}/player_api.php?${new URLSearchParams(allParams)}`;
+        return new Promise((resolve) => {
+            const client = url.startsWith('https') ? https : http;
+            const req = client.get(url, { headers: { 'User-Agent': USER_AGENT } }, (res) => {
+                if (res.statusCode !== 200) {
+                    res.resume();
+                    return resolve(null);
+                }
+                const parser = JSONStream.parse('*');
+                res.pipe(parser);
+                resolve(parser); // Retorna a stream como AsyncIterable
+            });
+            req.on('error', () => resolve(null));
+            req.setTimeout(180000, () => { req.abort(); resolve(null); });
+        });
+    }
+
+    async getVodStreamsAsyncIterable(categoryId) {
         const params = { action: 'get_vod_streams' };
         if (categoryId) params.category_id = categoryId;
-        return (await this._fetch(params, 90000)) || [];
+        return await this._streamApi(params);
     }
-    async getSeriesCategories() { return (await this._fetch({ action: 'get_series_categories' }, 30000)) || []; }
-    async getSeries(categoryId) {
+
+    async getSeriesAsyncIterable(categoryId) {
         const params = { action: 'get_series' };
         if (categoryId) params.category_id = categoryId;
-        return (await this._fetch(params, 90000)) || [];
+        return await this._streamApi(params);
     }
-    async getSeriesInfo(seriesId) { return (await this._fetch({ action: 'get_series_info', series_id: String(seriesId) }, 30000)) || {}; }
 
     getMovieStreamUrl(streamId, ext = 'mp4') {
         return `${this.baseUrl}/movie/${encodeURIComponent(this.username)}/${encodeURIComponent(this.password)}/${streamId}.${ext || 'mp4'}`;
@@ -350,19 +375,23 @@ class XtreamClient {
                 });
             };
 
-            if (!categories || categories.length === 0) {
-                const allMovies = await this.getVodStreams();
-                for (const m of allMovies) {
+            const processVodCat = async (categoryId) => {
+                const stream = await this.getVodStreamsAsyncIterable(categoryId);
+                if (!stream) return;
+                for await (const m of stream) {
                     processMovie(m);
-                    if (batch.length >= 500) { await insert(batch); batch = []; }
+                    if (batch.length >= 500) {
+                        await insert(batch);
+                        batch = [];
+                    }
                 }
+            };
+
+            if (!categories || categories.length === 0) {
+                await processVodCat(null);
             } else {
                 for (const cat of categories) {
-                    const movies = await this.getVodStreams(cat.category_id);
-                    for (const m of movies) {
-                        processMovie(m);
-                        if (batch.length >= 500) { await insert(batch); batch = []; }
-                    }
+                    await processVodCat(cat.category_id);
                 }
             }
             await insert(batch);
@@ -412,19 +441,23 @@ class XtreamClient {
                 });
             };
 
-            if (!categories || categories.length === 0) {
-                const allSeries = await this.getSeries();
-                for (const s of allSeries) {
+            const processSeriesCat = async (categoryId) => {
+                const stream = await this.getSeriesAsyncIterable(categoryId);
+                if (!stream) return;
+                for await (const s of stream) {
                     processSeries(s);
-                    if (batch.length >= 500) { await insert(batch); batch = []; }
+                    if (batch.length >= 500) {
+                        await insert(batch);
+                        batch = [];
+                    }
                 }
+            };
+
+            if (!categories || categories.length === 0) {
+                await processSeriesCat(null);
             } else {
                 for (const cat of categories) {
-                    const series = await this.getSeries(cat.category_id);
-                    for (const s of series) {
-                        processSeries(s);
-                        if (batch.length >= 500) { await insert(batch); batch = []; }
-                    }
+                    await processSeriesCat(cat.category_id);
                 }
             }
             await insert(batch);

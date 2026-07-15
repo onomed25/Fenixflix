@@ -190,7 +190,7 @@ async def lifespan(app: FastAPI):
     global _http_client, _serve_client, hfa_process
     
     try:
-        hfa_process = subprocess.Popen(["node", "hfa_server.js"], cwd=os.path.dirname(os.path.abspath(__file__)))
+        hfa_process = subprocess.Popen(["node", "--max-old-space-size=200", "hfa_server.js"], cwd=os.path.dirname(os.path.abspath(__file__)))
     except Exception as e:
         print(f"[HFA Server] Erro ao iniciar: {e}")
         
