@@ -25,9 +25,6 @@ from datetime import datetime, date
 import serve
 
 import on
-import hypex
-import atlas
-import figs
 from nexembed import resolve_nexembed
 
 # Pré-calculados no startup para evitar reflexão a cada request
@@ -36,7 +33,7 @@ _ON_HAS_TITLES    = False
 
 load_dotenv()
 
-VERSION = "1.0.6"
+VERSION = "1.0.7"
 CACHE_DIR = "cache"
 CATALOG_CACHE_TIME = 6 * 60 * 60
 POPULAR_CACHE_TIME = 24 * 60 * 60
@@ -182,25 +179,21 @@ async def prepopulate_scraper_cache_from_popular():
         except Exception as e:
             print(f"[SCRAPER-CACHE] Erro ao ler cache popular '{content_type}': {e}")
 
-async def sequential_prewarm():
-    # Delay de 15s para permitir que o Uvicorn inicie e responda à verificação de saúde do Render
-    await asyncio.sleep(15.0)
-    print("[STARTUP-PREWARM] Iniciando rebuild sequencial de catálogos...")
 
-    # 1. HypEx (DESATIVADO PARA TESTES)
-    print("[STARTUP-PREWARM] Hypex desativado para testes.")
 
-    # 2. Atlas (DESATIVADO PARA TESTES)
-    print("[STARTUP-PREWARM] Atlas desativado para testes.")
+import subprocess
 
-    # 3. Figs (DESATIVADO PARA TESTES)
-    print("[STARTUP-PREWARM] Figs desativado para testes.")
-
-    print("[STARTUP-PREWARM] Todos os pre-warms de catálogo concluídos sequencialmente!")
+hfa_process = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _http_client, _serve_client
+    global _http_client, _serve_client, hfa_process
+    
+    try:
+        hfa_process = subprocess.Popen(["node", "hfa_server.js"], cwd=os.path.dirname(os.path.abspath(__file__)))
+    except Exception as e:
+        print(f"[HFA Server] Erro ao iniciar: {e}")
+        
     _http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(15.0, connect=5.0),
         follow_redirects=True,
@@ -224,9 +217,6 @@ async def lifespan(app: FastAPI):
 
     await prepopulate_scraper_cache_from_popular()
 
-    # Pre-warm: agenda rebuild dos catálogos de forma sequencial em background
-    # para evitar pico de memória (OOM > 512MB) e travamento do SQLite no startup
-    asyncio.create_task(sequential_prewarm())
 
     yield
 
@@ -234,6 +224,13 @@ async def lifespan(app: FastAPI):
     await _http_client.aclose()
     await _serve_client.aclose()
     task_writer.cancel()
+    
+    if hfa_process:
+        try:
+            hfa_process.terminate()
+            hfa_process.wait(timeout=2)
+        except Exception:
+            pass
 
     # Garante a última gravação ao desligar a API
     if _CACHE_DIRTY and GLOBAL_SCRAPER_CACHE is not None:
@@ -799,6 +796,23 @@ async def resolve_redirect(url: str, client: httpx.AsyncClient) -> str:
         print(f"[Redirect Resolver] Erro ao resolver {url}: {e}")
     return current_url
 
+async def search_hfa(titles, content_type, season, episode, year):
+    import httpx
+    try:
+        payload = {
+            "titles": titles,
+            "contentType": content_type,
+            "season": season,
+            "episode": episode,
+            "year": year
+        }
+        resp = await _http_client.post("http://127.0.0.1:38472/search", json=payload, timeout=30.0)
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as e:
+        print(f"[HFA Client] Erro na requisição interna: {e}")
+    return []
+
 def format_stream_title(title_name: str, content_type: str, season=None, episode=None, audio_info: str = "Dublado") -> str:
     lines = [title_name]
     if content_type == "series" and season is not None and episode is not None:
@@ -902,14 +916,14 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
 
 
 
-        # Hypex Integration (DESATIVADO PARA TESTES)
-        novos_flags["hypex"] = "N"
-
-        # Atlas Integration (DESATIVADO PARA TESTES)
-        novos_flags["atlas"] = "N"
-
-        # Figs Integration (DESATIVADO PARA TESTES)
-        novos_flags["figs"] = "N"
+        # HFA Integration
+        hfa_flag = scraper_flags.get("hfa")
+        if hfa_flag == "N":
+            novos_flags["hfa"] = "N"
+        else:
+            outras_tarefas["hfa"] = asyncio.create_task(
+                search_hfa(titles, type, season, episode, year)
+            )
 
         # Next Integration (NexEmbed)
         next_flag = scraper_flags.get("next")
@@ -978,143 +992,11 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
             novos_flags[nome] = on_dict if on_dict else "S"
 
 
-        elif nome == "hypex":
-            sid_found = None
-            has_streams = False
-            for s in res:
-                if isinstance(s, dict):
-                    if "_hypex_series_id" in s:
-                        sid_found = s["_hypex_series_id"]
-                    if s.get("url"):
-                        has_streams = True
-            if sid_found:
-                novos_flags["hypex_sid"] = sid_found
-            
-            if has_streams:
-                novos_flags["hypex"] = []
-                for s in res:
-                    if isinstance(s, dict) and s.get("url"):
-                        q_match = re.search(r'FenixFlix\n(.*)', s["name"])
-                        q_val = q_match.group(1) if q_match else "HD"
-                        
-                        title_lines = [line.strip() for line in s["title"].split("\n") if line.strip()]
-                        audio_info = "Dublado"
-                        for line in title_lines:
-                            if line in ["Legendado", "Dual Áudio", "Nacional", "Dublado"]:
-                                audio_info = line
-                                break
-                        
-                        if audio_info == "Legendado":
-                            a_val = "L"
-                        elif audio_info == "Dual Áudio":
-                            a_val = "Dual"
-                        elif audio_info == "Nacional":
-                            a_val = "Nac"
-                        else:
-                            a_val = "D"
-                            
-                        entry = {
-                            "url": s["url"],
-                            "q": q_val,
-                            "a": a_val
-                        }
-                        if "headers" in s:
-                            entry["headers"] = s["headers"]
-                        novos_flags["hypex"].append(entry)
+        elif nome == "hfa":
+            if res and isinstance(res, list) and len(res) > 0:
+                novos_flags["hfa"] = "S"
             else:
-                novos_flags["hypex"] = "N"
-
-        elif nome == "atlas":
-            sid_found = None
-            has_streams = False
-            for s in res:
-                if isinstance(s, dict):
-                    if "_atlas_series_id" in s:
-                        sid_found = s["_atlas_series_id"]
-                    if s.get("url"):
-                        has_streams = True
-            if sid_found:
-                novos_flags["atlas_sid"] = sid_found
-            
-            if has_streams:
-                novos_flags["atlas"] = []
-                for s in res:
-                    if isinstance(s, dict) and s.get("url"):
-                        q_match = re.search(r'FenixFlix\n(.*)', s["name"])
-                        q_val = q_match.group(1) if q_match else "HD"
-                        
-                        title_lines = [line.strip() for line in s["title"].split("\n") if line.strip()]
-                        audio_info = "Dublado"
-                        for line in title_lines:
-                            if line in ["Legendado", "Dual Áudio", "Nacional", "Dublado"]:
-                                audio_info = line
-                                break
-                        
-                        if audio_info == "Legendado":
-                            a_val = "L"
-                        elif audio_info == "Dual Áudio":
-                            a_val = "Dual"
-                        elif audio_info == "Nacional":
-                            a_val = "Nac"
-                        else:
-                            a_val = "D"
-                            
-                        entry = {
-                            "url": s["url"],
-                            "q": q_val,
-                            "a": a_val
-                        }
-                        if "headers" in s:
-                            entry["headers"] = s["headers"]
-                        novos_flags["atlas"].append(entry)
-            else:
-                novos_flags["atlas"] = "N"
-
-        elif nome == "figs":
-            sid_found = None
-            has_streams = False
-            for s in res:
-                if isinstance(s, dict):
-                    if "_figs_series_id" in s:
-                        sid_found = s["_figs_series_id"]
-                    if s.get("url"):
-                        has_streams = True
-            if sid_found:
-                novos_flags["figs_sid"] = sid_found
-            
-            if has_streams:
-                novos_flags["figs"] = []
-                for s in res:
-                    if isinstance(s, dict) and s.get("url"):
-                        q_match = re.search(r'FenixFlix\n(.*)', s["name"])
-                        q_val = q_match.group(1) if q_match else "HD"
-                        
-                        title_lines = [line.strip() for line in s["title"].split("\n") if line.strip()]
-                        audio_info = "Dublado"
-                        for line in title_lines:
-                            if line in ["Legendado", "Dual Áudio", "Nacional", "Dublado"]:
-                                audio_info = line
-                                break
-                        
-                        if audio_info == "Legendado":
-                            a_val = "L"
-                        elif audio_info == "Dual Áudio":
-                            a_val = "Dual"
-                        elif audio_info == "Nacional":
-                            a_val = "Nac"
-                        else:
-                            a_val = "D"
-                            
-                        entry = {
-                            "url": s["url"],
-                            "q": q_val,
-                            "a": a_val
-                        }
-                        if "headers" in s:
-                            entry["headers"] = s["headers"]
-                        novos_flags["figs"].append(entry)
-            else:
-                novos_flags["figs"] = "N"
+                novos_flags["hfa"] = "N"
 
         elif nome == "next":
             if res and isinstance(res, tuple) and len(res) == 2:

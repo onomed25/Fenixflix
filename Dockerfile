@@ -4,9 +4,17 @@ WORKDIR /app
 
 COPY . .
 
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Instala dependências básicas e o Node.js 20.x
+RUN apt-get update && apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
+# Instala dependências do Python
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Instala dependências do Node.js (ex: sqlite3 para o HFA)
+RUN npm install
 
 EXPOSE 8000
 
