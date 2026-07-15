@@ -4,7 +4,7 @@ import asyncio
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import ORJSONResponse, JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -33,7 +33,7 @@ _ON_HAS_TITLES    = False
 
 load_dotenv()
 
-VERSION = "1.0.7"
+VERSION = "1.0.8"
 CACHE_DIR = "cache"
 CATALOG_CACHE_TIME = 6 * 60 * 60
 POPULAR_CACHE_TIME = 24 * 60 * 60
@@ -43,6 +43,10 @@ SERVE_ = os.getenv("serve")
 
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
+
+STREAMS_CACHE_DIR = os.path.join(CACHE_DIR, "streams")
+if not os.path.exists(STREAMS_CACHE_DIR):
+    os.makedirs(STREAMS_CACHE_DIR)
 
 _http_client: httpx.AsyncClient = None
 _serve_client: httpx.AsyncClient = None
@@ -413,8 +417,8 @@ async def get_recent_catalog_cached(content_type):
 
     if os.path.exists(cache_file) and (time.time() - os.path.getmtime(cache_file)) < CATALOG_CACHE_TIME:
         try:
-            with open(cache_file, "rb") as f:
-                dados_salvos = orjson.loads(f.read())
+            async with aiofiles.open(cache_file, "rb") as f:
+                dados_salvos = orjson.loads(await f.read())
                 itens_salvos = dados_salvos.get(content_type, [])
                 if itens_salvos:
                     return itens_salvos
@@ -424,8 +428,8 @@ async def get_recent_catalog_cached(content_type):
     catalogs = await build_recent_catalog()
     if catalogs.get("movie") or catalogs.get("series"):
         try:
-            with open(cache_file, "wb") as f:
-                f.write(orjson.dumps(catalogs, option=orjson.OPT_INDENT_2))
+            async with aiofiles.open(cache_file, "wb") as f:
+                await f.write(orjson.dumps(catalogs, option=orjson.OPT_INDENT_2))
 
             if os.path.exists(SCRAPER_STATUS_FILE):
                 os.remove(SCRAPER_STATUS_FILE)
@@ -453,8 +457,8 @@ async def get_popular_catalog_cached(content_type):
 
     if os.path.exists(cache_file) and (time.time() - os.path.getmtime(cache_file)) < POPULAR_CACHE_TIME:
         try:
-            with open(cache_file, "rb") as f:
-                dados_salvos = orjson.loads(f.read())
+            async with aiofiles.open(cache_file, "rb") as f:
+                dados_salvos = orjson.loads(await f.read())
                 if dados_salvos:
                     return filtrar_populares_por_data(dados_salvos)
         except:
@@ -498,8 +502,8 @@ async def get_popular_catalog_cached(content_type):
 
         if metas_unicas:
             try:
-                with open(cache_file, "wb") as f:
-                    f.write(orjson.dumps(metas_unicas, option=orjson.OPT_INDENT_2))
+                async with aiofiles.open(cache_file, "wb") as f:
+                    await f.write(orjson.dumps(metas_unicas, option=orjson.OPT_INDENT_2))
             except:
                 pass
             asyncio.create_task(sync_scraper_cache_from_items(metas_unicas, content_type))
@@ -513,8 +517,8 @@ async def get_populares_fenix_cached(content_type: str):
 
     if os.path.exists(cache_file) and (time.time() - os.path.getmtime(cache_file)) < CATALOG_CACHE_TIME:
         try:
-            with open(cache_file, "rb") as f:
-                dados_salvos = orjson.loads(f.read())
+            async with aiofiles.open(cache_file, "rb") as f:
+                dados_salvos = orjson.loads(await f.read())
                 if dados_salvos:
                     return dados_salvos
         except:
@@ -528,8 +532,8 @@ async def get_populares_fenix_cached(content_type: str):
         print(f"[POPULARES FENIX] Erro ao buscar vistos: {e}")
         if os.path.exists(cache_file):
             try:
-                with open(cache_file, "rb") as f:
-                    return orjson.loads(f.read())
+                async with aiofiles.open(cache_file, "rb") as f:
+                    return orjson.loads(await f.read())
             except:
                 pass
         return []
@@ -596,8 +600,8 @@ async def get_populares_fenix_cached(content_type: str):
 
     if resolved_metas:
         try:
-            with open(cache_file, "wb") as f:
-                f.write(orjson.dumps(resolved_metas, option=orjson.OPT_INDENT_2))
+            async with aiofiles.open(cache_file, "wb") as f:
+                await f.write(orjson.dumps(resolved_metas, option=orjson.OPT_INDENT_2))
         except Exception as e:
             print(f"[POPULARES FENIX] Erro ao gravar cache: {e}")
 
@@ -610,7 +614,7 @@ async def root(request: Request):
 
 @app.get("/manifest.json")
 async def manifest_endpoint():
-    return JSONResponse(content={
+    return ORJSONResponse(content={
         "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
         "description": "Addon de filmes, séries e Animes dublados e legendados em Português (PT‑BR)",
         "logo": "https://i.imgur.com/e6skOZ8.png",
@@ -630,19 +634,19 @@ async def manifest_endpoint():
 @app.get("/catalog/{type}/{id}/{extra}.json")
 async def catalog_endpoint(type: str, id: str, extra: str = None, skip: int = 0):
     if (extra and "skip=" in extra) or skip > 0:
-        return JSONResponse(content={"metas": []})
+        return ORJSONResponse(content={"metas": []})
 
     if id == "recentes_servidor":
         metas = await get_recent_catalog_cached(type)
-        return JSONResponse(content={"metas": metas})
+        return ORJSONResponse(content={"metas": metas})
     elif id == "popular":
         metas = await get_popular_catalog_cached(type)
-        return JSONResponse(content={"metas": metas})
+        return ORJSONResponse(content={"metas": metas})
     elif id == "populares_fenix":
         metas = await get_populares_fenix_cached(type)
-        return JSONResponse(content={"metas": metas})
+        return ORJSONResponse(content={"metas": metas})
 
-    return JSONResponse(content={"metas": []})
+    return ORJSONResponse(content={"metas": []})
 
 async def enviar_pedido_background(url: str):
     """Reutiliza o client HTTP global em vez de criar/fechar um novo a cada chamada."""
@@ -748,37 +752,61 @@ async def atualizar_cache_e_pedido(
         print(f"[BACKGROUND TASK ERROR] Erro na atualização do cache ou pedido: {e}")
 
 
+import time
+REDIRECT_CACHE = {}
+
 async def resolve_redirect(url: str, client: httpx.AsyncClient) -> str:
-    if not url or not url.startswith("http"):
+    if not url or not isinstance(url, str) or not url.startswith("http"):
         return url
+        
+    url = url.replace("\n", "").replace("\r", "").strip()
     
-    # Bypass para domínios rápidos e que não bloqueiam via Cloudflare, e também arquivos diretos
-    bypass_domains = ["koyeb.app", "localhost", "127.0.0.1", "fenixflix", "mediafire.com", "r2.dev", "google", "drive"]
-    if any(domain in url for domain in bypass_domains) or url.endswith(('.mp4', '.mkv', '.m3u8')):
+    now = time.time()
+    if url in REDIRECT_CACHE:
+        cached_url, timestamp = REDIRECT_CACHE[url]
+        if now - timestamp < 3600:
+            return cached_url
+    
+    # Bypass para domínios rápidos e que não bloqueiam via Cloudflare
+    bypass_domains = ["koyeb.app", "localhost", "127.0.0.1", "fenixflix", "mediafire.com", "r2.dev", "google", "drive", "download.mediafire.com", ".mediafire.com"]
+    if any(domain in url for domain in bypass_domains):
         return url
     
     current_url = url
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "*/*"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
     }
     
     try:
         for _ in range(2):
-            r = await client.head(current_url, headers=headers, follow_redirects=False, timeout=1.5)
-            if r.status_code in (301, 302, 303, 307, 308):
-                location = r.headers.get("location")
-                if not location:
-                    break
-                if location.startswith("/"):
-                    from urllib.parse import urljoin
-                    current_url = urljoin(current_url, location)
+            async with client.stream("GET", current_url, headers=headers, follow_redirects=False, timeout=6.0) as r:
+                if r.status_code in (301, 302, 303, 307, 308):
+                    location = r.headers.get("location")
+                    if not location:
+                        break
+                    if location.startswith("/"):
+                        from urllib.parse import urljoin
+                        current_url = urljoin(current_url, location)
+                    else:
+                        current_url = location
+                elif r.status_code >= 400:
+                    REDIRECT_CACHE[url] = ("error:dead", now)
+                    return "error:dead"
                 else:
-                    current_url = location
-            else:
-                break
+                    break
     except Exception as e:
-        print(f"[Redirect Resolver] Erro ao resolver {url}: {e}")
+        print(f"[Redirect Resolver] Erro ao resolver {url}: {type(e).__name__} - {e}")
+        # Retorna error:dead para garantir que a URL original (com usuário/senha) nunca seja vazada no Stremio em caso de erro
+        REDIRECT_CACHE[url] = ("error:dead", now)
+        return "error:dead"
+    
+    if len(REDIRECT_CACHE) > 5000:
+        # Prevent memory leak by clearing cache when it gets too large
+        REDIRECT_CACHE.clear()
+        
+    REDIRECT_CACHE[url] = (current_url, now)
     return current_url
 
 async def search_custom_api(imdb_id: str, titles: list, content_type: str, season: str = None, episode: str = None):
@@ -794,6 +822,7 @@ async def search_custom_api(imdb_id: str, titles: list, content_type: str, seaso
         search_id = f"{imdb_id}:{season}:{episode}"
         
     url = f"{url_base.rstrip('/')}/{senha}/{search_id}"
+    print(f"[CustomAPI Debug] 🔍 Buscando em: {url}")
     
     try:
         resp = await _http_client.get(url, timeout=10.0)
@@ -808,15 +837,23 @@ async def search_custom_api(imdb_id: str, titles: list, content_type: str, seaso
                 
             stremio_streams = []
             title_name = titles[0] if titles else "Filme"
+            seen_combinations = set()
+            
             for s in streams_list:
                 if not isinstance(s, dict): continue
                 stream_url = s.get("url")
                 if not stream_url: continue
                 
                 qualidade = s.get("qualidade", "1080p")
+                audio = s.get("audio", "Dublado")
                 provedor = s.get("provedor", "API")
                 
-                title_str = format_stream_title(title_name, content_type, season, episode, audio_info="Dublado")
+                comb = (qualidade, audio, provedor)
+                if comb in seen_combinations:
+                    continue
+                seen_combinations.add(comb)
+                
+                title_str = format_stream_title(title_name, content_type, season, episode, audio_info=audio)
                 
                 stremio_streams.append({
                     "name": f"FenixFlix\n{qualidade}",
@@ -825,9 +862,12 @@ async def search_custom_api(imdb_id: str, titles: list, content_type: str, seaso
                     "behaviorHints": {"notWebReady": False, "bingeGroup": f"fenixflix-{provedor.lower()}"}
                 })
                 
+            print(f"[CustomAPI Debug] ✅ Sucesso! {len(stremio_streams)} streams encontrados.")
             return stremio_streams
+        else:
+            print(f"[CustomAPI Debug] ⚠️ Erro HTTP: {resp.status_code}")
     except Exception as e:
-        print(f"[Custom API] Erro ao buscar {url}: {e}")
+        print(f"[CustomAPI Debug] ❌ Erro ao buscar: {e}")
     return []
 
 def format_stream_title(title_name: str, content_type: str, season=None, episode=None, audio_info: str = "Dublado") -> str:
@@ -856,6 +896,19 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
         clean_id = parts[0]
         if type == 'series' and len(parts) >= 3:
             season, episode = int(parts[1]), int(parts[2])
+
+    stream_file_name = f"{type}_{clean_id.replace(':', '_')}_{season}_{episode}.json" if season else f"{type}_{clean_id.replace(':', '_')}.json"
+    stream_cache_path = os.path.join(STREAMS_CACHE_DIR, stream_file_name)
+    
+    if os.path.exists(stream_cache_path):
+        if time.time() - os.path.getmtime(stream_cache_path) < 7200: # 2 horas de cache
+            try:
+                async with aiofiles.open(stream_cache_path, "rb") as f:
+                    cached_data = await f.read()
+                    cached_streams = orjson.loads(cached_data)
+                    return ORJSONResponse(content={"streams": cached_streams, "cacheMaxAge": 3600})
+            except Exception as e:
+                print(f"[CACHE STREAMS] Erro ao ler {stream_file_name}: {e}")
 
     cache_status = await load_scraper_cache()
     entry = cache_status.get(clean_id)
@@ -1064,17 +1117,29 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
 
     # Resolver todos os redirecionamentos em paralelo antes de entregar ao Stremio
     if todos_streams:
-        tasks = []
+        url_to_task = {}
         for s in todos_streams:
-            if s.get("url"):
-                tasks.append(resolve_redirect(s["url"], _http_client))
-            else:
-                tasks.append(asyncio.sleep(0, s.get("url")))
+            u = s.get("url")
+            if u and u not in url_to_task:
+                url_to_task[u] = asyncio.create_task(resolve_redirect(u, _http_client))
         
-        resolved_urls = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        for s, r_url in zip(todos_streams, resolved_urls):
+        if url_to_task:
+            await asyncio.gather(*url_to_task.values(), return_exceptions=True)
+            
+        seen_urls = set()
+        for s in todos_streams:
+            u = s.get("url")
+            r_url = u
+            if u and u in url_to_task:
+                try:
+                    res = url_to_task[u].result()
+                    if isinstance(res, str):
+                        r_url = res
+                except Exception:
+                    r_url = u
             if isinstance(r_url, str):
+                if r_url == "error:dead":
+                    continue
                 if "cloudflare-terms-of-service-abuse" in r_url:
                     if s.get("url"):
                         bad_original_urls.add(s["url"])
@@ -1083,9 +1148,23 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                     continue
                 if r_url.startswith("http"):
                     s["url"] = r_url
+            
+            final_url = s.get("url")
+            if final_url and final_url in seen_urls:
+                continue
+            if final_url:
+                seen_urls.add(final_url)
+                
             resolved_streams.append(s)
     else:
-        resolved_streams = todos_streams
+        seen_urls = set()
+        for s in todos_streams:
+            final_url = s.get("url")
+            if final_url and final_url in seen_urls:
+                continue
+            if final_url:
+                seen_urls.add(final_url)
+            resolved_streams.append(s)
 
     # Filtrar novos_flags para não salvar URLs bloqueadas pela Cloudflare no cache
     if bad_original_urls:
@@ -1127,7 +1206,15 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                 other_streams.append(s)
         resolved_streams = serve_streams + other_streams
 
-    return JSONResponse(content={"streams": resolved_streams, "cacheMaxAge": 3600})
+        # Salva no cache json no disco
+        try:
+            async with aiofiles.open(stream_cache_path, "wb") as f:
+                await f.write(orjson.dumps(resolved_streams, option=orjson.OPT_INDENT_2))
+            print(f"[CACHE STREAMS] Salvo no cache local: {stream_file_name}")
+        except Exception as e:
+            print(f"[CACHE STREAMS] Erro ao salvar {stream_file_name}: {e}")
+
+    return ORJSONResponse(content={"streams": resolved_streams, "cacheMaxAge": 3600})
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
