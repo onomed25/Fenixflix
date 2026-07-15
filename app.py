@@ -183,17 +183,9 @@ async def prepopulate_scraper_cache_from_popular():
 
 import subprocess
 
-hfa_process = None
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _http_client, _serve_client, hfa_process
-    
-    try:
-        hfa_process = subprocess.Popen(["node", "--max-old-space-size=200", "hfa_server.js"], cwd=os.path.dirname(os.path.abspath(__file__)))
-    except Exception as e:
-        print(f"[HFA Server] Erro ao iniciar: {e}")
-        
+    global _http_client, _serve_client
     _http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(15.0, connect=5.0),
         follow_redirects=True,
@@ -224,13 +216,6 @@ async def lifespan(app: FastAPI):
     await _http_client.aclose()
     await _serve_client.aclose()
     task_writer.cancel()
-    
-    if hfa_process:
-        try:
-            hfa_process.terminate()
-            hfa_process.wait(timeout=2)
-        except Exception:
-            pass
 
     # Garante a última gravação ao desligar a API
     if _CACHE_DIRTY and GLOBAL_SCRAPER_CACHE is not None:
@@ -796,21 +781,53 @@ async def resolve_redirect(url: str, client: httpx.AsyncClient) -> str:
         print(f"[Redirect Resolver] Erro ao resolver {url}: {e}")
     return current_url
 
-async def search_hfa(titles, content_type, season, episode, year):
-    import httpx
+async def search_custom_api(imdb_id: str, titles: list, content_type: str, season: str = None, episode: str = None):
+    import os
+    url_base = os.getenv("CUSTOM_API_URL")
+    senha = os.getenv("CUSTOM_API_PASS")
+    if not url_base or not senha or not imdb_id:
+        return []
+    
+    # Monta a URL. Se for série, anexa a temporada e o episódio separados por :
+    search_id = imdb_id
+    if content_type == "series" and season is not None and episode is not None:
+        search_id = f"{imdb_id}:{season}:{episode}"
+        
+    url = f"{url_base.rstrip('/')}/{senha}/{search_id}"
+    
     try:
-        payload = {
-            "titles": titles,
-            "contentType": content_type,
-            "season": season,
-            "episode": episode,
-            "year": year
-        }
-        resp = await _http_client.post("http://127.0.0.1:38472/search", json=payload, timeout=30.0)
+        resp = await _http_client.get(url, timeout=10.0)
         if resp.status_code == 200:
-            return resp.json()
+            data = resp.json()
+            if isinstance(data, dict) and "streams" in data:
+                streams_list = data["streams"]
+            elif isinstance(data, list):
+                streams_list = data
+            else:
+                streams_list = [data]
+                
+            stremio_streams = []
+            title_name = titles[0] if titles else "Filme"
+            for s in streams_list:
+                if not isinstance(s, dict): continue
+                stream_url = s.get("url")
+                if not stream_url: continue
+                
+                qualidade = s.get("qualidade", "1080p")
+                provedor = s.get("provedor", "API")
+                
+                title_str = format_stream_title(title_name, content_type, season, episode, audio_info="Dublado")
+                
+                stremio_streams.append({
+                    "name": f"FenixFlix\n{qualidade}",
+                    "title": f"{title_str}\n{provedor}",
+                    "url": stream_url,
+                    "behaviorHints": {"notWebReady": False, "bingeGroup": f"fenixflix-{provedor.lower()}"}
+                })
+                
+            return stremio_streams
     except Exception as e:
-        print(f"[HFA Client] Erro na requisição interna: {e}")
+        print(f"[Custom API] Erro ao buscar {url}: {e}")
     return []
 
 def format_stream_title(title_name: str, content_type: str, season=None, episode=None, audio_info: str = "Dublado") -> str:
@@ -916,14 +933,6 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
 
 
 
-        # HFA Integration
-        hfa_flag = scraper_flags.get("hfa")
-        if hfa_flag == "N":
-            novos_flags["hfa"] = "N"
-        else:
-            outras_tarefas["hfa"] = asyncio.create_task(
-                search_hfa(titles, type, season, episode, year)
-            )
 
         # Next Integration (NexEmbed)
         next_flag = scraper_flags.get("next")
@@ -947,6 +956,15 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                     episode=episode,
                     client=_http_client
                 )
+            )
+
+        # Custom API Integration
+        custom_api_flag = scraper_flags.get("custom_api")
+        if custom_api_flag == "N":
+            novos_flags["custom_api"] = "N"
+        elif imdb_id:
+            outras_tarefas["custom_api"] = asyncio.create_task(
+                search_custom_api(imdb_id, titles, type, season, episode)
             )
 
     tarefas_ativas = {}
@@ -991,12 +1009,6 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
 
             novos_flags[nome] = on_dict if on_dict else "S"
 
-
-        elif nome == "hfa":
-            if res and isinstance(res, list) and len(res) > 0:
-                novos_flags["hfa"] = "S"
-            else:
-                novos_flags["hfa"] = "N"
 
         elif nome == "next":
             if res and isinstance(res, tuple) and len(res) == 2:
