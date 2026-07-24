@@ -630,7 +630,7 @@ async def get_logo():
 async def manifest_endpoint(request: Request, config: str = None):
     # Dynamically gets the current host URL for the logo
     base_url = str(request.base_url).rstrip("/")
-    logo_url = f"{base_url}/logo.png"
+    logo_url = f"https://i.imgur.com/e6skOZ8.png"
 
     return JSONResponse(content={
         "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
