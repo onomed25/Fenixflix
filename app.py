@@ -58,6 +58,19 @@ tmdb_semaphore = asyncio.Semaphore(5)  # Reduzido de 7 para 5 para poupar RAM e 
 # --- SISTEMA DE CACHE GLOBAL COM LOCK E GRAVAÇÃO EM BACKGROUND ---
 GLOBAL_SCRAPER_CACHE = None
 GLOBAL_TMDB_INDEX = {}
+
+stream_concurrency_sem = asyncio.Semaphore(8)
+
+async def gather_with_concurrency(n, *coros, return_exceptions=False):
+    semaphore = asyncio.Semaphore(n)
+    async def sem_coro(c):
+        async with semaphore:
+            return await c
+    return await asyncio.gather(*(sem_coro(c) for c in coros), return_exceptions=return_exceptions)
+
+async def run_scraper_sem(sem, coro):
+    async with sem:
+        return await coro
 CACHE_LOCK = asyncio.Lock()
 _CACHE_DIRTY = False
 
@@ -156,7 +169,8 @@ async def sync_scraper_cache_from_items(items: list, content_type: str):
 
     print(f"[SCRAPER-CACHE] {len(novos)} itens novos em '{content_type}' — resolvendo imdb_id+titles...")
 
-    results = await asyncio.gather(
+    results = await gather_with_concurrency(
+        5,
         *[_resolve_popular_item(tmdb_id, content_type) for tmdb_id in novos],
         return_exceptions=True,
     )
@@ -406,8 +420,8 @@ async def build_recent_catalog():
 
     movie_tasks  = [fetch_tmdb_meta_ptbr(i, "movie")  for i in movie_ids]
     series_tasks = [fetch_tmdb_meta_ptbr(i, "series") for i in series_ids]
-    movies_raw  = await asyncio.gather(*movie_tasks,  return_exceptions=True)
-    series_raw  = await asyncio.gather(*series_tasks, return_exceptions=True)
+    movies_raw  = await gather_with_concurrency(5, *movie_tasks,  return_exceptions=True)
+    series_raw  = await gather_with_concurrency(5, *series_tasks, return_exceptions=True)
 
     def clean(item):
         if isinstance(item, dict):
@@ -630,7 +644,7 @@ async def get_logo():
 async def manifest_endpoint(request: Request, config: str = None):
     # Dynamically gets the current host URL for the logo
     base_url = str(request.base_url).rstrip("/")
-    logo_url = f"https://i.imgur.com/e6skOZ8.png"
+    logo_url = f"{base_url}/logo.png"
 
     return JSONResponse(content={
         "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
@@ -1002,7 +1016,7 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
 
     # Sempre pesquisar no serve, ignorando o cache
     outras_tarefas["serve"] = asyncio.create_task(
-        serve.search_serve(clean_id, type, season, episode, client=_serve_client, **kwargs_serve)
+        run_scraper_sem(stream_concurrency_sem, serve.search_serve(clean_id, type, season, episode, client=_serve_client, **kwargs_serve))
     )
 
     if tmdb_id:
@@ -1024,7 +1038,7 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
 
             kwargs_on = {"titles": titles} if _ON_HAS_TITLES else {}
             outras_tarefas["on"] = asyncio.create_task(
-                on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache, **kwargs_on)
+                run_scraper_sem(stream_concurrency_sem, on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache, **kwargs_on))
             )
 
         # Custom API Integration
@@ -1035,7 +1049,7 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
             # Usa o imdb_id se existir, mas se for AioMeta mandando tmdb:, podemos mandar o tmdb: para a API customizada
             api_id = clean_id if clean_id.startswith("tmdb:") else (imdb_id if imdb_id else f"tmdb:{tmdb_id}")
             outras_tarefas["custom_api"] = asyncio.create_task(
-                search_custom_api(api_id, titles, type, season, episode)
+                run_scraper_sem(stream_concurrency_sem, search_custom_api(api_id, titles, type, season, episode))
             )
 
         # RedeFlix Integration
@@ -1045,7 +1059,7 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
             else:
                 redeflix_url = f"https://redeflixapi.store/serie/{tmdb_id}/{season}/{episode}"
             outras_tarefas["redeflix"] = asyncio.create_task(
-                resolve_redeflix(url=redeflix_url, client=_http_client)
+                run_scraper_sem(stream_concurrency_sem, resolve_redeflix(url=redeflix_url, client=_http_client))
             )
 
         # Shop Integration
@@ -1054,14 +1068,14 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
             novos_flags["shop"] = "N"
         else:
             outras_tarefas["shop"] = asyncio.create_task(
-                resolve_shop(
+                run_scraper_sem(stream_concurrency_sem, resolve_shop(
                     imdb_id=imdb_id,
                     tmdb_id=tmdb_id,
                     content_type=type,
                     season=season,
                     episode=episode,
                     client=_http_client
-                )
+                ))
             )
 
     if is_anime:
@@ -1070,7 +1084,7 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
             novos_flags["homura"] = "N"
         else:
             outras_tarefas["homura"] = asyncio.create_task(
-                homura.search_serve(tmdb_id, type, season, episode, client=_http_client, titles=titles)
+                run_scraper_sem(stream_concurrency_sem, homura.search_serve(tmdb_id, type, season, episode, client=_http_client, titles=titles))
             )
     tarefas_ativas = {}
     tarefas_ativas.update(outras_tarefas)
