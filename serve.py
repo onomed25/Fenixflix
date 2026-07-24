@@ -18,18 +18,28 @@ async def search_serve(imdb_id, content_type, season=None, episode=None, client:
     url = f"{SERVE_}/{imdb_id}"
 
     async def _fetch(c):
-        response = await c.get(url)
-        if response.status_code == 404:
-            print("[DEBUG - SERVE] ❌ Conteúdo não encontrado (404)")
-            return None
-        response.raise_for_status()
-        return response.json()
+        print(f"[DEBUG - SERVE] 📡 Iniciando requisição para: {url}")
+        try:
+            response = await c.get(url, timeout=15)
+            print(f"[DEBUG - SERVE] 📥 Resposta recebida: HTTP {response.status_code}")
+            if response.status_code == 404:
+                print(f"[DEBUG - SERVE] ❌ Conteúdo não encontrado no servidor ({imdb_id})")
+                return None
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as exc:
+            print(f"[DEBUG - SERVE] ❌ Erro HTTP {exc.response.status_code} ao acessar {exc.request.url}")
+            raise
+        except httpx.RequestError as exc:
+            print(f"[DEBUG - SERVE] ❌ Erro de conexão/Timeout ao acessar {exc.request.url}: {exc}")
+            raise
 
     try:
         if client is not None:
             local_data = await _fetch(client)
         else:
-            async with httpx.AsyncClient(timeout=10) as c:
+            print("[Aviso] Criando client HTTPX local em serve (sem pool).")
+            async with httpx.AsyncClient(timeout=15) as c:
                 local_data = await _fetch(c)
 
         if local_data is None:
@@ -82,15 +92,21 @@ async def search_serve(imdb_id, content_type, season=None, episode=None, client:
         else:
             print(f"[DEBUG] ⚠️ Tipo desconhecido: {content_type}")
 
-    except httpx.RequestError as e:
-        print(f"[ERRO HTTP] {e}")
+    except httpx.HTTPError as e:
+        print(f"[ERRO HTTP - SERVE] Falha na comunicação com o servidor principal: {e}")
     except Exception as e:
-        print(f"[ERRO GERAL] {type(e).__name__}: {e}")
+        print(f"[ERRO GERAL - SERVE] Ocorreu uma exceção inesperada {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
 
     return []
 
 
 import re
+
+_RE_CAM = re.compile(r'\b(cam|ts|tc|hdtc|hdcam|camrip)\b')
+_RE_FENIX = re.compile(r'(?i)\bFenixflix\b')
+_RE_QUAL = re.compile(r'(?i)\b(1080p|720p|4k|2160p|hd)\b')
 
 def montar_stream(url_stream, label, content_type, season=None, episode=None, titles=None):
     bases = [
@@ -108,28 +124,32 @@ def montar_stream(url_stream, label, content_type, season=None, episode=None, ti
     qualidade = "HD"
     label_lower = label.lower()
     url_lower = (url_stream or "").lower()
-    if "1080" in label_lower or "1080" in url_lower:
-        qualidade = "1080p"
-    elif "720" in label_lower or "720" in url_lower:
-        qualidade = "720p"
-    elif "4k" in label_lower or "2160" in url_lower:
+    combined_lower = label_lower + " " + url_lower
+    if "4k" in combined_lower or "2160" in combined_lower:
         qualidade = "4K"
-    elif "hd" in label_lower or "hd" in url_lower:
-        qualidade = "HD"
+    elif "1080" in combined_lower:
+        qualidade = "1080p"
+    elif "720" in combined_lower:
+        qualidade = "720p"
+    elif "480" in combined_lower or "sd" in combined_lower:
+        qualidade = "SD"
+    elif "cinema" in combined_lower or "telecine" in combined_lower or _RE_CAM.search(combined_lower):
+        qualidade = "CAM"
+    elif "hd" in combined_lower:
+        qualidade = "720p"
 
     # 2. Limpar label para a descrição (remover qualidade e FenixFlix)
     desc_label = label
-    desc_label = re.sub(r'(?i)\bFenixflix\b', '', desc_label)
-    desc_label = re.sub(r'(?i)\b(1080p|720p|4k|2160p|hd)\b', '', desc_label)
-    # Remover múltiplos espaços/hifens/pontos extras
-    desc_label = re.sub(r'\s*-\s*', ' ', desc_label)
-    desc_label = re.sub(r'\s+', ' ', desc_label).strip()
-
-    if not desc_label:
-        if "legen" in label_lower:
-            desc_label = "Legendado"
-        else:
-            desc_label = "Dublado"
+    desc_label = _RE_FENIX.sub('', desc_label)
+    desc_label = _RE_QUAL.sub('', desc_label)
+    
+    # Padronizar para Dublado ou Legendado ou Português (Nacional)
+    if "leg" in label_lower or "sub" in label_lower:
+        desc_label = "Legendado"
+    elif "nacional" in label_lower or "portugu" in label_lower or "portuges" in label_lower:
+        desc_label = "Português"
+    else:
+        desc_label = "Dublado"
 
     # 3. Obter nome do filme/série
     nome = ""
@@ -160,7 +180,7 @@ def montar_stream(url_stream, label, content_type, season=None, episode=None, ti
 
     stream = {
         "name": f"FenixFlix\n{qualidade}",
-        "description": description_str,
+        "description": f"{description_str}\nFenix",
         "url": url_stream,
         "behaviorHints": {
             "notWebReady": False,

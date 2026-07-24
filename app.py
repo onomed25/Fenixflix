@@ -4,7 +4,7 @@ import asyncio
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import ORJSONResponse, JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -20,20 +20,23 @@ import re
 import inspect
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+from cachetools import TTLCache
+
+load_dotenv()
 
 from datetime import datetime, date
 import serve
 
 import on
-from nexembed import resolve_nexembed
+import homura
+from redeflix import resolve_redeflix
+from shop import resolve_shop
 
 # Pré-calculados no startup para evitar reflexão a cada request
 _SERVE_HAS_TITLES = False
 _ON_HAS_TITLES    = False
 
-load_dotenv()
-
-VERSION = "1.0.8"
+VERSION = "1.1.0"
 CACHE_DIR = "cache"
 CATALOG_CACHE_TIME = 6 * 60 * 60
 POPULAR_CACHE_TIME = 24 * 60 * 60
@@ -50,15 +53,16 @@ if not os.path.exists(STREAMS_CACHE_DIR):
 
 _http_client: httpx.AsyncClient = None
 _serve_client: httpx.AsyncClient = None
-tmdb_semaphore = asyncio.Semaphore(7)
+tmdb_semaphore = asyncio.Semaphore(5)  # Reduzido de 7 para 5 para poupar RAM e CPU no Render
 
 # --- SISTEMA DE CACHE GLOBAL COM LOCK E GRAVAÇÃO EM BACKGROUND ---
 GLOBAL_SCRAPER_CACHE = None
+GLOBAL_TMDB_INDEX = {}
 CACHE_LOCK = asyncio.Lock()
 _CACHE_DIRTY = False
 
 async def load_scraper_cache():
-    global GLOBAL_SCRAPER_CACHE
+    global GLOBAL_SCRAPER_CACHE, GLOBAL_TMDB_INDEX
 
     if GLOBAL_SCRAPER_CACHE is not None:
         return GLOBAL_SCRAPER_CACHE
@@ -68,24 +72,27 @@ async def load_scraper_cache():
             async with aiofiles.open(SCRAPER_STATUS_FILE, "rb") as f:
                 data = await f.read()
                 GLOBAL_SCRAPER_CACHE = orjson.loads(data)
+                GLOBAL_TMDB_INDEX = {v.get("tmdb_id"): k for k, v in GLOBAL_SCRAPER_CACHE.items() if isinstance(v, dict) and v.get("tmdb_id")}
                 return GLOBAL_SCRAPER_CACHE
         except Exception as e:
             print(f"[CACHE ERROR] Falha ao ler scrapers_status.json: {e}")
 
     GLOBAL_SCRAPER_CACHE = {}
+    GLOBAL_TMDB_INDEX = {}
     return GLOBAL_SCRAPER_CACHE
 
 async def save_scraper_cache(cache_data):
     """Apenas atualiza a RAM e sinaliza que precisa ser salvo pelo processo em background."""
-    global GLOBAL_SCRAPER_CACHE, _CACHE_DIRTY
+    global GLOBAL_SCRAPER_CACHE, _CACHE_DIRTY, GLOBAL_TMDB_INDEX
     GLOBAL_SCRAPER_CACHE = cache_data
+    GLOBAL_TMDB_INDEX = {v.get("tmdb_id"): k for k, v in cache_data.items() if isinstance(v, dict) and v.get("tmdb_id")}
     _CACHE_DIRTY = True
 
 async def background_cache_writer():
-    """Roda no background e salva a cada 60 segundos se houver mudanças."""
+    """Roda no background e salva a cada 120 segundos se houver mudanças."""
     global _CACHE_DIRTY, GLOBAL_SCRAPER_CACHE
     while True:
-        await asyncio.sleep(10)
+        await asyncio.sleep(120)
         if _CACHE_DIRTY and GLOBAL_SCRAPER_CACHE is not None:
             async with CACHE_LOCK:
                 try:
@@ -243,13 +250,12 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-_TMDB_CACHE = {}
-_TMDB_CACHE_TTL = 7200  # 2 horas em segundos
+_TMDB_CACHE = TTLCache(maxsize=500, ttl=7200)  # Reduzido de 2000 para 500 para poupar RAM
 
 async def obter_dados_base_tmdb(imdb_id: str, content_type: str, client: httpx.AsyncClient = None):
     cache_key = f"{imdb_id}_{content_type}"
     cached = _TMDB_CACHE.get(cache_key)
-    if cached and (time.time() - cached['time']) < _TMDB_CACHE_TTL:
+    if cached:
         return cached['data']
 
     tmdb_id_final = None
@@ -317,7 +323,7 @@ async def obter_dados_base_tmdb(imdb_id: str, content_type: str, client: httpx.A
             pass
 
     resultado = (tmdb_id_final, real_imdb_id, titulos, is_anime, year)
-    _TMDB_CACHE[cache_key] = {'time': time.time(), 'data': resultado}
+    _TMDB_CACHE[cache_key] = {'data': resultado}
     return resultado
 
 async def fetch_tmdb_meta_ptbr(item_id: str, content_type: str):
@@ -612,9 +618,21 @@ async def root(request: Request):
     manifest_data = {"name": "FENIXFLIX", "description": "Addon de filmes, séries e Animes dublados e legendados em Português (PT‑BR)", "types": ["movie", "series"]}
     return templates.TemplateResponse(request=request, name="index.html", context={"manifest": manifest_data, "version": VERSION})
 
+@app.get("/logo.png")
+async def get_logo():
+    logo_path = os.path.join(BASE_DIR, "logo.png")
+    if os.path.exists(logo_path):
+        return FileResponse(logo_path, media_type="image/png")
+    return JSONResponse(content={"error": "Not found"}, status_code=404)
+
 @app.get("/manifest.json")
-async def manifest_endpoint():
-    return ORJSONResponse(content={
+@app.get("/{config}/manifest.json")
+async def manifest_endpoint(request: Request, config: str = None):
+    # Dynamically gets the current host URL for the logo
+    base_url = str(request.base_url).rstrip("/")
+    logo_url = f"{base_url}/logo.png"
+
+    return JSONResponse(content={
         "id": "com.fenixflix", "version": VERSION, "name": "FENIXFLIX",
         "description": "Addon de filmes, séries e Animes dublados e legendados em Português (PT‑BR)",
         "logo": "https://i.imgur.com/e6skOZ8.png",
@@ -632,21 +650,23 @@ async def manifest_endpoint():
 
 @app.get("/catalog/{type}/{id}.json")
 @app.get("/catalog/{type}/{id}/{extra}.json")
-async def catalog_endpoint(type: str, id: str, extra: str = None, skip: int = 0):
+@app.get("/{config}/catalog/{type}/{id}.json")
+@app.get("/{config}/catalog/{type}/{id}/{extra}.json")
+async def catalog_endpoint(type: str, id: str, extra: str = None, skip: int = 0, config: str = None):
     if (extra and "skip=" in extra) or skip > 0:
-        return ORJSONResponse(content={"metas": []})
+        return JSONResponse(content={"metas": []})
 
     if id == "recentes_servidor":
         metas = await get_recent_catalog_cached(type)
-        return ORJSONResponse(content={"metas": metas})
+        return JSONResponse(content={"metas": metas})
     elif id == "popular":
         metas = await get_popular_catalog_cached(type)
-        return ORJSONResponse(content={"metas": metas})
+        return JSONResponse(content={"metas": metas})
     elif id == "populares_fenix":
         metas = await get_populares_fenix_cached(type)
-        return ORJSONResponse(content={"metas": metas})
+        return JSONResponse(content={"metas": metas})
 
-    return ORJSONResponse(content={"metas": []})
+    return JSONResponse(content={"metas": []})
 
 async def enviar_pedido_background(url: str):
     """Reutiliza o client HTTP global em vez de criar/fechar um novo a cada chamada."""
@@ -655,7 +675,7 @@ async def enviar_pedido_background(url: str):
         response = await _http_client.get(url, headers=headers, timeout=10.0)
         print(f"[AUTO-PEDIDO] Pedido enviado para {url} - Status: {response.status_code}")
     except Exception as e:
-        print(f"[AUTO-PEDIDO] Erro ao enviar pedido automático: {e}")
+        print(f"[AUTO-PEDIDO] Erro ao enviar pedido automático para {url}: {type(e).__name__} - {e}")
 
 async def atualizar_cache_e_pedido(
     base_id, tmdb_id, titles, type, novos_flags, outras_tarefas,
@@ -699,17 +719,10 @@ async def atualizar_cache_e_pedido(
         episodes_backup = cache_status[base_id].pop("episodes", None)
         scrapers_backup = cache_status[base_id].pop("scrapers", None)
 
-        slug_novo = novos_flags.pop("_doramogo_slug_novo", None)
-        if slug_novo:
-            cache_status[base_id]["doramogo_slug"] = slug_novo
-            cache_mudou = True
-
-
-
         if tmdb_id and type == "series":
             if episodes_backup is None:
                 episodes_backup = {}
-            flags_para_salvar = {k: v for k, v in novos_flags.items() if k != "doramogo_slug"}
+            flags_para_salvar = {k: v for k, v in novos_flags.items()}
 
             ep_key = f"{season}:{episode}"
             if ep_key not in episodes_backup:
@@ -753,7 +766,7 @@ async def atualizar_cache_e_pedido(
 
 
 import time
-REDIRECT_CACHE = {}
+REDIRECT_CACHE = TTLCache(maxsize=200, ttl=3600)  # Reduzido de 1000 para 200 para poupar RAM
 
 async def resolve_redirect(url: str, client: httpx.AsyncClient) -> str:
     if not url or not isinstance(url, str) or not url.startswith("http"):
@@ -761,14 +774,12 @@ async def resolve_redirect(url: str, client: httpx.AsyncClient) -> str:
         
     url = url.replace("\n", "").replace("\r", "").strip()
     
-    now = time.time()
-    if url in REDIRECT_CACHE:
-        cached_url, timestamp = REDIRECT_CACHE[url]
-        if now - timestamp < 3600:
-            return cached_url
+    cached_url = REDIRECT_CACHE.get(url)
+    if cached_url:
+        return cached_url
     
-    # Bypass para domínios rápidos e que não bloqueiam via Cloudflare
-    bypass_domains = ["koyeb.app", "localhost", "127.0.0.1", "fenixflix", "mediafire.com", "r2.dev", "google", "drive", "download.mediafire.com", ".mediafire.com"]
+    # Bypass para domínios rápidos e que não bloqueiam via Cloudflare, bem como arquivos diretos
+    bypass_domains = ["koyeb.app", "localhost", "127.0.0.1", "fenixflix", "mediafire.com", "r2.dev", "google", "drive", "download.mediafire.com", ".mediafire.com", "redeflixapi.store", "qzz.io", "hmr-cdn", "2kbrfonte", ".mp4", ".m3u8"]
     if any(domain in url for domain in bypass_domains):
         return url
     
@@ -792,34 +803,30 @@ async def resolve_redirect(url: str, client: httpx.AsyncClient) -> str:
                     else:
                         current_url = location
                 elif r.status_code >= 400:
-                    REDIRECT_CACHE[url] = ("error:dead", now)
+                    REDIRECT_CACHE[url] = "error:dead"
                     return "error:dead"
                 else:
                     break
     except Exception as e:
         print(f"[Redirect Resolver] Erro ao resolver {url}: {type(e).__name__} - {e}")
         # Retorna error:dead para garantir que a URL original (com usuário/senha) nunca seja vazada no Stremio em caso de erro
-        REDIRECT_CACHE[url] = ("error:dead", now)
+        REDIRECT_CACHE[url] = "error:dead"
         return "error:dead"
     
-    if len(REDIRECT_CACHE) > 5000:
-        # Prevent memory leak by clearing cache when it gets too large
-        REDIRECT_CACHE.clear()
-        
-    REDIRECT_CACHE[url] = (current_url, now)
+    REDIRECT_CACHE[url] = current_url
     return current_url
 
-async def search_custom_api(imdb_id: str, titles: list, content_type: str, season: str = None, episode: str = None):
+async def search_custom_api(api_id: str, titles: list, content_type: str, season: str = None, episode: str = None):
     import os
     url_base = os.getenv("CUSTOM_API_URL")
     senha = os.getenv("CUSTOM_API_PASS")
-    if not url_base or not senha or not imdb_id:
+    if not url_base or not senha or not api_id:
         return []
     
     # Monta a URL. Se for série, anexa a temporada e o episódio separados por :
-    search_id = imdb_id
+    search_id = api_id
     if content_type == "series" and season is not None and episode is not None:
-        search_id = f"{imdb_id}:{season}:{episode}"
+        search_id = f"{api_id}:{season}:{episode}"
         
     url = f"{url_base.rstrip('/')}/{senha}/{search_id}"
     print(f"[CustomAPI Debug] 🔍 Buscando em: {url}")
@@ -882,9 +889,50 @@ def format_stream_title(title_name: str, content_type: str, season=None, episode
     lines.append(audio_info)
     return "\n".join(lines)
 
+def filter_streams(streams, config_str):
+    if not config_str:
+        return streams
+    try:
+        q_part = [p for p in config_str.split('|') if p.startswith("qualities=")]
+        a_part = [p for p in config_str.split('|') if p.startswith("audio=")]
+        
+        allowed_q = q_part[0].split("=")[1].lower().split(",") if q_part else ["4k", "1080p", "720p", "sd", "cam"]
+        allowed_a = a_part[0].split("=")[1].lower().split(",") if a_part else ["dublado", "legendado"]
+        
+        filtered = []
+        for s in streams:
+            name_title = (s.get("name", "") + " " + s.get("title", "") + " " + s.get("description", "")).lower()
+            
+            # Identificar qualidade
+            if "cam" in name_title or " ts " in name_title or "cinema" in name_title or "telesync" in name_title:
+                q_stream = "cam"
+            elif "4k" in name_title or "2160p" in name_title:
+                q_stream = "4k"
+            elif "1080p" in name_title or "fhd" in name_title:
+                q_stream = "1080p"
+            elif "720p" in name_title or "hd" in name_title:
+                q_stream = "720p"
+            elif "sd " in name_title or " sd" in name_title or "480p" in name_title:
+                q_stream = "sd"
+            else:
+                q_stream = "unknown"
+            
+            # Identificar áudio
+            is_leg = "leg" in name_title or "legendado" in name_title
+            a_stream = "legendado" if is_leg else "dublado"
+            
+            if (q_stream == "unknown" or q_stream in allowed_q) and a_stream in allowed_a:
+                filtered.append(s)
+        
+        return filtered if filtered else streams
+    except Exception as e:
+        print(f"[FILTER] Erro ao filtrar qualidades/audio: {e}")
+        return streams
+
 @app.get("/stream/{type}/{id}.json")
+@app.get("/{config}/stream/{type}/{id}.json")
 @limiter.limit("30/minute")
-async def stream(type: str, id: str, request: Request, background_tasks: BackgroundTasks):
+async def stream(type: str, id: str, request: Request, background_tasks: BackgroundTasks, config: str = None):
     season, episode = None, None
     if id.startswith("tmdb:"):
         parts = id.split(':')
@@ -906,7 +954,8 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                 async with aiofiles.open(stream_cache_path, "rb") as f:
                     cached_data = await f.read()
                     cached_streams = orjson.loads(cached_data)
-                    return ORJSONResponse(content={"streams": cached_streams, "cacheMaxAge": 3600})
+                    cached_streams = filter_streams(cached_streams, config)
+                    return JSONResponse(content={"streams": cached_streams, "cacheMaxAge": 3600})
             except Exception as e:
                 print(f"[CACHE STREAMS] Erro ao ler {stream_file_name}: {e}")
 
@@ -916,11 +965,10 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
 
     if entry is None and clean_id.startswith("tmdb:"):
         tmdb_id_raw = clean_id.split(":")[1]
-        for key, val in cache_status.items():
-            if val.get("tmdb_id") == tmdb_id_raw:
-                entry = val
-                base_id = key
-                break
+        found_key = GLOBAL_TMDB_INDEX.get(tmdb_id_raw)
+        if found_key:
+            entry = cache_status.get(found_key)
+            base_id = found_key
 
     year = None
     if entry and entry.get("tmdb_id") and "is_anime" in entry:
@@ -952,13 +1000,10 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
     novos_flags = scraper_flags.copy()
     outras_tarefas = {}
 
-    serve_flag = scraper_flags.get("serve")
-    if serve_flag == "N":
-        novos_flags["serve"] = "N"
-    else:
-        outras_tarefas["serve"] = asyncio.create_task(
-            serve.search_serve(clean_id, type, season, episode, client=_serve_client, **kwargs_serve)
-        )
+    # Sempre pesquisar no serve, ignorando o cache
+    outras_tarefas["serve"] = asyncio.create_task(
+        serve.search_serve(clean_id, type, season, episode, client=_serve_client, **kwargs_serve)
+    )
 
     if tmdb_id:
         on_flag = scraper_flags.get("on")
@@ -982,26 +1027,34 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                 on.search_serve(tmdb_id, type, season, episode, client=_http_client, cached_links=on_cache, **kwargs_on)
             )
 
-
-
-
-
-
-        # Next Integration (NexEmbed)
-        next_flag = scraper_flags.get("next")
-        if next_flag and isinstance(next_flag, str) and next_flag.startswith("http"):
-            # A URL do player está no cache. Vamos resolvê-la em tempo real para obter o m3u8 fresco.
-            outras_tarefas["next"] = asyncio.create_task(
-                resolve_nexembed(
-                    client=_http_client,
-                    player_url=next_flag
-                )
-            )
-        elif next_flag == "N":
-            novos_flags["next"] = "N"
+        # Custom API Integration
+        custom_api_flag = scraper_flags.get("custom_api")
+        if custom_api_flag == "N":
+            novos_flags["custom_api"] = "N"
         elif imdb_id or tmdb_id:
-            outras_tarefas["next"] = asyncio.create_task(
-                resolve_nexembed(
+            # Usa o imdb_id se existir, mas se for AioMeta mandando tmdb:, podemos mandar o tmdb: para a API customizada
+            api_id = clean_id if clean_id.startswith("tmdb:") else (imdb_id if imdb_id else f"tmdb:{tmdb_id}")
+            outras_tarefas["custom_api"] = asyncio.create_task(
+                search_custom_api(api_id, titles, type, season, episode)
+            )
+
+        # RedeFlix Integration
+        if tmdb_id:
+            if type == "movie":
+                redeflix_url = f"https://redeflixapi.store/filme/{tmdb_id}"
+            else:
+                redeflix_url = f"https://redeflixapi.store/serie/{tmdb_id}/{season}/{episode}"
+            outras_tarefas["redeflix"] = asyncio.create_task(
+                resolve_redeflix(url=redeflix_url, client=_http_client)
+            )
+
+        # Shop Integration
+        shop_flag = scraper_flags.get("shop")
+        if shop_flag == "N":
+            novos_flags["shop"] = "N"
+        else:
+            outras_tarefas["shop"] = asyncio.create_task(
+                resolve_shop(
                     imdb_id=imdb_id,
                     tmdb_id=tmdb_id,
                     content_type=type,
@@ -1011,15 +1064,14 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                 )
             )
 
-        # Custom API Integration
-        custom_api_flag = scraper_flags.get("custom_api")
-        if custom_api_flag == "N":
-            novos_flags["custom_api"] = "N"
-        elif imdb_id:
-            outras_tarefas["custom_api"] = asyncio.create_task(
-                search_custom_api(imdb_id, titles, type, season, episode)
+    if is_anime:
+        homura_flag = scraper_flags.get("homura")
+        if homura_flag == "N":
+            novos_flags["homura"] = "N"
+        else:
+            outras_tarefas["homura"] = asyncio.create_task(
+                homura.search_serve(tmdb_id, type, season, episode, client=_http_client, titles=titles)
             )
-
     tarefas_ativas = {}
     tarefas_ativas.update(outras_tarefas)
 
@@ -1063,22 +1115,34 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
             novos_flags[nome] = on_dict if on_dict else "S"
 
 
-        elif nome == "next":
-            if res and isinstance(res, tuple) and len(res) == 2:
-                p_url, s_link = res
-                if p_url and s_link:
-                    title_name = titles[0] if titles else "Filme"
-                    title_str = format_stream_title(title_name, type, season, episode, audio_info="Dublado")
-                    s_info = {
-                        "name": "FenixFlix\n720p",
-                        "title": f"{title_str}\nNext",
-                        "url": s_link,
-                        "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-next"}
-                    }
+        elif nome == "redeflix":
+            if res and isinstance(res, str) and res.startswith("http"):
+                title_name = titles[0] if titles else "Filme"
+                title_str = format_stream_title(title_name, type, season, episode, audio_info="Dublado")
+                s_info = {
+                    "name": "FenixFlix",
+                    "title": f"{title_str}\nFlix",
+                    "url": res,
+                    "behaviorHints": {"notWebReady": False, "bingeGroup": "fenixflix-flix"}
+                }
+                todos_streams.append(s_info)
+                novos_flags["redeflix"] = "S"
+                continue
+            novos_flags["redeflix"] = "N"
+            continue
+
+        elif nome == "shop":
+            if res and isinstance(res, list):
+                title_name = titles[0] if titles else "Filme"
+                title_str = format_stream_title(title_name, type, season, episode, audio_info="Dublado")
+                for s_info in res:
+                    s_info["name"] = "FenixFlix"
+                    # Se tiver a tag da resolução vindo do shop.py, podemos preservá-la se quiser, 
+                    s_info["title"] = f"{title_str}\nMoody"
                     todos_streams.append(s_info)
-                    novos_flags["next"] = p_url
-                    continue
-            novos_flags["next"] = "N"
+                novos_flags["shop"] = "S"
+            else:
+                novos_flags["shop"] = "N"
             continue
 
         else:
@@ -1086,7 +1150,6 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
 
         for s_info in res:
             if isinstance(s_info, dict) and s_info.get("url"):
-                s_info.pop("_slug_found", None)
                 s_info.pop("_mediafire_url", None)
                 s_info.pop("_label", None)
                 s_info.pop("_cache_key", None)
@@ -1143,8 +1206,6 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                 if "cloudflare-terms-of-service-abuse" in r_url:
                     if s.get("url"):
                         bad_original_urls.add(s["url"])
-                    if s.get("behaviorHints", {}).get("bingeGroup") == "fenixflix-next":
-                        novos_flags["next"] = "N"
                     continue
                 if r_url.startswith("http"):
                     s["url"] = r_url
@@ -1214,7 +1275,45 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
         except Exception as e:
             print(f"[CACHE STREAMS] Erro ao salvar {stream_file_name}: {e}")
 
-    return ORJSONResponse(content={"streams": resolved_streams, "cacheMaxAge": 3600})
+    resolved_streams = filter_streams(resolved_streams, config)
+
+    return JSONResponse(content={"streams": resolved_streams, "cacheMaxAge": 3600})
+
+def filter_streams(streams, config):
+    if not config:
+        return streams
+    try:
+        q_part = [p for p in config.split('|') if p.startswith("qualities=")]
+        a_part = [p for p in config.split('|') if p.startswith("audio=")]
+        
+        allowed_q = q_part[0].split("=")[1].lower().split(",") if q_part else ["4k", "1080p", "720p", "sd", "cam"]
+        allowed_a = a_part[0].split("=")[1].lower().split(",") if a_part else ["dublado", "legendado"]
+        
+        filtered = []
+        for s in streams:
+            name_title = (s.get("name", "") + " " + s.get("title", "") + " " + s.get("description", "")).lower()
+            
+            if "cam" in name_title or " ts " in name_title or "cinema" in name_title or "telesync" in name_title:
+                q_stream = "cam"
+            elif "4k" in name_title or "2160p" in name_title:
+                q_stream = "4k"
+            elif "1080p" in name_title or "fhd" in name_title:
+                q_stream = "1080p"
+            elif "720p" in name_title or "hd" in name_title:
+                q_stream = "720p"
+            else:
+                q_stream = "sd"
+            
+            is_leg = "leg" in name_title or "legendado" in name_title
+            a_stream = "legendado" if is_leg else "dublado"
+            
+            if q_stream in allowed_q and a_stream in allowed_a:
+                filtered.append(s)
+        
+        return filtered if (filtered or not streams) else streams
+    except Exception as e:
+        print(f"[FILTER] Erro ao filtrar qualidades/audio: {e}")
+        return streams
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

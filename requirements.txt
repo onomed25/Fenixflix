@@ -13,3 +13,4 @@ aiofiles
 orjson
 uvloop
 aiosqlite
+rapidfuzz

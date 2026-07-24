@@ -4,10 +4,11 @@ import re
 from urllib.parse import unquote
 import asyncio
 import time
+from cachetools import TTLCache
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
 
-cache_final_links = {}
+cache_final_links = TTLCache(maxsize=1000, ttl=7200)
 
 _RE_IFRAME_PLAYER = re.compile(
     r'<iframe\s+[^>]*src=["\']([^"\']*player_2\.php[^"\']*)["\']', 
@@ -26,56 +27,53 @@ def parse_iframe(html_text):
     return None
 
 
+_RE_MF_DOWNLOAD_BTN = re.compile(r'href="([^"]+)"[^>]*id="downloadButton"', re.IGNORECASE)
+_RE_MF_DOWNLOAD_BTN_ALT = re.compile(r'id="downloadButton"[^>]*href="([^"]+)"', re.IGNORECASE)
+
 def parse_mediafire_btn(html_text):
     """Lê o HTML do Mediafire e encontra o botão final de download (MP4)."""
-    soup = BeautifulSoup(html_text, 'lxml')
-    btn = soup.select_one("a#downloadButton")
-    if btn:
-        return btn.get("href")
+    match = _RE_MF_DOWNLOAD_BTN.search(html_text)
+    if not match:
+        match = _RE_MF_DOWNLOAD_BTN_ALT.search(html_text)
+    if match:
+        return match.group(1)
+    try:
+        soup = BeautifulSoup(html_text, 'html.parser')
+        btn = soup.select_one("a#downloadButton")
+        if btn:
+            return btn.get("href")
+    except Exception:
+        pass
     return None
 
 # --------------------------------------------------------
 
 async def extrair_link(label, cache_key, target_url, client, cached_mediafire_url=None, nome=None, tep=None, season=None):
-    now = time.time()
-    
-    # Limpeza de expirados e controle de tamanho da RAM (máx 1000 itens)
-    if len(cache_final_links) > 200:
-        expired_keys = [k for k, v in cache_final_links.items() if (now - v["time"]) >= 7200]
-        for ek in expired_keys:
-            cache_final_links.pop(ek, None)
-            
-    if len(cache_final_links) > 1000:
-        sorted_keys = sorted(cache_final_links.keys(), key=lambda k: cache_final_links[k]["time"])
-        for k_to_del in sorted_keys[:200]:
-            cache_final_links.pop(k_to_del, None)
-
     ram_key = f"{cache_key}:{target_url}"
-    if ram_key in cache_final_links:
-        cached_entry = cache_final_links[ram_key]
-        if (now - cached_entry["time"]) < 7200: # 2 horas
-            print(f"[Azullog Debug] ⚡ Usando link MP4 direto em RAM para {label} ({cache_key})!")
-            partes = []
-            if nome:
-                partes.append(nome)
-            if tep:
-                partes.append(tep)
-            partes.append(f"{label}\nON")
-            desc = "\n".join(partes)
+    cached_entry = cache_final_links.get(ram_key)
+    if cached_entry:
+        print(f"[Azullog Debug] ⚡ Usando link MP4 direto em RAM para {label} ({cache_key})!")
+        partes = []
+        if nome:
+            partes.append(nome)
+        if tep:
+            partes.append(tep)
+        partes.append(f"{label}\nON")
+        desc = "\n".join(partes)
 
-            name_str = "ON"
-            if season is not None and str(season).strip():
-                name_str = f"ON - Temporada {season}"
+        name_str = "ON"
+        if season is not None and str(season).strip():
+            name_str = f"ON - Temporada {season}"
 
-            return {
-                "name": "FenixFlix",
-                "description": desc,
-                "url": cached_entry["url"],
-                "behaviorHints": {"notWebReady": False, "bingeGroup": f"fenixflix-azullog-{label.lower()}"},
-                "_mediafire_url": cached_entry["mediafire_url"],
-                "_cache_key": cache_key,
-                "_label": label
-            }
+        return {
+            "name": "FenixFlix",
+            "description": desc,
+            "url": cached_entry["url"],
+            "behaviorHints": {"notWebReady": False, "bingeGroup": f"fenixflix-azullog-{label.lower()}"},
+            "_mediafire_url": cached_entry["mediafire_url"],
+            "_cache_key": cache_key,
+            "_label": label
+        }
 
     mediafire_url = cached_mediafire_url
 
@@ -91,26 +89,26 @@ async def extrair_link(label, cache_key, target_url, client, cached_mediafire_ur
     # 3. Se não tem nada no cache, faz o scraping
     else:
         try:
-            print(f"[Azullog Debug] 🔍 Testando link direto: {target_url}")
-            res = await client.get(target_url, headers={"User-Agent": USER_AGENT, "accept": "*/*"})
+            print(f"[Azullog Debug] 🔍 Testando link direto (bypass): {target_url}")
+            # Extrai o ID final da URL (ex: tvtmdb65493t2e1dub) para pular o iframe do Cloudflare
+            video_id = target_url.split('/e/')[-1]
+            player_url = f"https://1take.top/player_2.php?id={video_id}"
 
-            if res.status_code == 200:
-                # MÁGICA AQUI: O parse pesado do BeautifulSoup vai para uma Thread separada!
-                # O FastAPI fica livre para processar outros usuários enquanto isso acontece.
-                player_url = await asyncio.to_thread(parse_iframe, res.text)
+            print(f"[Azullog Debug] Resolvendo player ({label}): {player_url}")
 
-                if player_url:
-                    print(f"[Azullog Debug] Resolvendo player ({label}): {player_url}")
-                    res2 = await client.get(player_url, headers={"referer": target_url, "User-Agent": USER_AGENT})
+            # Roda a requisição direto no client HTTP assíncrono (reuso do pool TLS)
+            res2 = await client.get(player_url, headers={"User-Agent": USER_AGENT, "Referer": target_url}, timeout=10.0)
+            res2_text = res2.text
 
-                    api_url_match = re.search(r"const apiUrl = `([^`]+)`", res2.text)
-                    if api_url_match:
-                        api_url = api_url_match.group(1)
-                        mediafire_enc_match = re.search(r"[?&]url=([^&]+)", api_url)
+            api_url_match = re.search(r"const apiUrl = `([^`]+)`", res2_text)
+            if api_url_match:
+                api_url = api_url_match.group(1)
+                mediafire_enc_match = re.search(r"[?&]url=([^&]+)", api_url)
 
-                        if mediafire_enc_match:
-                            mediafire_url = unquote(mediafire_enc_match.group(1))
-                            print(f"[Azullog Debug] Mediafire URL encontrada ({label})!")
+                if mediafire_enc_match:
+                    from urllib.parse import unquote
+                    mediafire_url = unquote(mediafire_enc_match.group(1))
+                    print(f"[Azullog Debug] Mediafire URL encontrada ({label})!")
         except Exception as e:
             print(f"[Azullog Debug] Erro durante a extração de {label}: {e}")
 
@@ -121,16 +119,15 @@ async def extrair_link(label, cache_key, target_url, client, cached_mediafire_ur
 
     # 5. Tendo o link base, entra no Mediafire e pega o botão MP4 fresco
     try:
-        mf_res = await client.get(mediafire_url, headers={"User-Agent": USER_AGENT})
+        mf_res = await client.get(mediafire_url, headers={"User-Agent": USER_AGENT}, timeout=10.0)
 
-        # MÁGICA AQUI: O parse do Mediafire também vai para uma Thread separada!
-        final_mp4 = await asyncio.to_thread(parse_mediafire_btn, mf_res.text)
+        # Usamos regex que é muito rápido em CPU, descartando o peso extremo de criar Threads
+        final_mp4 = parse_mediafire_btn(mf_res.text)
 
         if final_mp4:
             cache_final_links[ram_key] = {
                 "url": final_mp4,
-                "mediafire_url": mediafire_url,
-                "time": now
+                "mediafire_url": mediafire_url
             }
             partes = []
             if nome:
