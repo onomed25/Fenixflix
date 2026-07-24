@@ -1,10 +1,18 @@
 <!DOCTYPE html>
 <html style="background-image: url('https://dl.strem.io/addon-background.jpg');">
-
 <head>
     <meta charset="utf-8">
     <title>{{ manifest.name }} - Stremio Addon</title>
+    <link rel="shortcut icon" href="/logo.png" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,600,700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            /* Emil Design Engineering - Custom Easing Curves */
+            --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+            --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+            --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+        }
+
         * { box-sizing: border-box; }
         body, html { margin: 0; padding: 0; width: 100%; min-height: 100%; }
         
@@ -14,6 +22,7 @@
             display: flex; 
             font-family: 'Open Sans', Arial, sans-serif; 
             color: white; 
+            overflow: hidden; /* Evitar scroll durante o modal */
         }
         
         html { 
@@ -23,63 +32,309 @@
             box-shadow: inset 0 0 0 2000px rgb(0 0 0 / 60%); 
         }
 
-        h1 { font-size: 4.5vh; font-weight: 700; }
-        h2 { font-size: 2.2vh; font-weight: normal; font-style: italic; opacity: 0.8; }
-        h3 { font-size: 2.2vh; }
-        h1, h2, h3, p { margin: 0; text-shadow: 0 0 1vh rgba(0, 0, 0, 0.15); }
-        p { font-size: 1.75vh; }
+        h1 { font-size: 4.5vh; font-weight: 700; margin: 0; text-shadow: 0 0 1vh rgba(0, 0, 0, 0.15); letter-spacing: -0.02em; }
+        h2 { font-size: 2.2vh; font-weight: normal; font-style: italic; opacity: 0.8; margin: 0; text-shadow: 0 0 1vh rgba(0, 0, 0, 0.15); }
+        h3 { font-size: 2.2vh; margin: 0; text-shadow: 0 0 1vh rgba(0, 0, 0, 0.15); }
+        p { font-size: 1.75vh; margin: 0; text-shadow: 0 0 1vh rgba(0, 0, 0, 0.15); }
         ul { font-size: 1.75vh; margin: 0; margin-top: 1vh; padding-left: 3vh; }
         a { color: white; }
-        a.install-link { text-decoration: none; }
-        button { border: 0; outline: 0; color: white; background: #8A5AAB; padding: 1.2vh 3.5vh; margin: auto; text-align: center; font-family: 'Open Sans', Arial, sans-serif; font-size: 2.2vh; font-weight: 600; cursor: pointer; display: block; box-shadow: 0 0.5vh 1vh rgba(0, 0, 0, 0.2); transition: box-shadow 0.1s ease-in-out; }
-        button:hover { box-shadow: none; }
-        button:active { box-shadow: 0 0 0 0.5vh white inset; }
-        #addon { width: 40vh; margin: auto; }
+        a.install-link { text-decoration: none; display: block; }
+        
+        button.btn-primary { 
+            border: 0; 
+            outline: 0; 
+            color: white; 
+            background: #8A5AAB; 
+            padding: 1.2vh 3.5vh; 
+            margin: auto; 
+            text-align: center; 
+            font-family: 'Open Sans', Arial, sans-serif; 
+            font-size: 2.2vh; 
+            font-weight: 600; 
+            cursor: pointer; 
+            display: block; 
+            border-radius: 8px;
+            box-shadow: 0 4px 14px 0 rgba(138, 90, 171, 0.39);
+            transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out), filter 200ms ease;
+        }
+        button.btn-primary:hover { box-shadow: 0 6px 20px rgba(138, 90, 171, 0.23); }
+        button.btn-primary:active { transform: scale(0.97); }
+
+        #addon { width: 40vh; margin: auto; position: relative; z-index: 10; }
         .logo { height: 14vh; width: 14vh; margin: auto; margin-bottom: 3vh; }
-        .logo img { width: 100%; border-radius: 10px; }
+        .logo img { width: 100%; border-radius: 12px; }
         .name, .version { display: inline-block; vertical-align: top; }
         .name { line-height: 5vh; margin: 0; }
         .version { position: relative; line-height: 5vh; opacity: 0.8; margin-bottom: 2vh; }
-        .contact { position: absolute; left: 0; bottom: 4vh; width: 100%; text-align: center; }
-        .contact a { font-size: 1.4vh; font-style: italic; }
         .separator { margin-bottom: 4vh; }
         
-        /* Ícone da Engrenagem */
-       
-        /* Popup de Configuração (Easter Egg) */
-        #config-container {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            display: none; z-index: 1000; flex-direction: column; align-items: center;
+        /* Botão de Configuração - Apple Design */
+        .settings-trigger {
+            position: absolute;
+            top: 2vh;
+            right: 2vh;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px) saturate(150%);
+            -webkit-backdrop-filter: blur(10px) saturate(150%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: transform 160ms var(--ease-out), background 200ms ease;
         }
-        #config-container p {
-            text-align: center; color: black; font-weight: bold;
-            background-color: rgba(255, 255, 255, 0.85); padding: 1vh 2vh;
-            border-radius: 10px; margin-top: 1.5vh;
+        .settings-trigger:hover { background: rgba(255, 255, 255, 0.25); }
+        .settings-trigger:active { transform: scale(0.95); }
+        .settings-trigger svg { width: 24px; height: 24px; fill: white; opacity: 0.9; }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            
+            /* Start hidden */
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 250ms var(--ease-out);
         }
-        #config-image { max-width: 80vw; max-height: 80vh; border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
-        #close-config {
-            position: absolute; top: -15px; right: -15px; font-size: 20px; color: white;
-            background-color: #e50914; border: 2px solid white; border-radius: 50%;
-            width: 30px; height: 30px; text-align: center; line-height: 26px; cursor: pointer;
-            font-weight: bold;
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Modal Content - Apple Glassmorphism */
+        .modal-content {
+            background: rgba(30, 30, 30, 0.7);
+            backdrop-filter: blur(25px) saturate(200%);
+            -webkit-backdrop-filter: blur(25px) saturate(200%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 3vh;
+            width: 90%;
+            max-width: 600px; /* Aumentado para acomodar duas colunas */
+            color: white;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            
+            /* Animation starts from 0.95 as per Emil's rule */
+            transform: scale(0.95);
+            opacity: 0;
+            transition: transform 300ms var(--ease-out), opacity 300ms var(--ease-out);
+            transform-origin: center;
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3vh;
+        }
+        .modal-header h3 { font-size: 2.5vh; margin: 0; font-weight: 600; }
+        
+        .close-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 160ms var(--ease-out), background 160ms ease;
+        }
+        .close-btn:active { transform: scale(0.92); }
+        .close-btn:hover { background: rgba(255, 255, 255, 0.2); }
+
+        .section-title { margin: 0 0 1vh 0; font-size: 1.8vh; opacity: 0.9; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        .options-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
+            gap: 1.2vh; 
+            margin-bottom: 3vh;
+        }
+        
+        /* Modern Toggles */
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.2vh 1.5vh;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 160ms var(--ease-out), background 160ms ease;
+        }
+        .toggle-row:active { transform: scale(0.98); }
+        .toggle-row:hover { background: rgba(255, 255, 255, 0.1); }
+        
+        .toggle-info { display: flex; flex-direction: column; }
+        .toggle-title { font-weight: 600; font-size: 1.7vh; }
+        .toggle-desc { font-size: 1.3vh; opacity: 0.6; }
+
+        /* iOS style switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.2);
+            transition: .3s var(--ease-out);
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute; content: "";
+            height: 24px; width: 24px; left: 2px; bottom: 2px;
+            background-color: white;
+            transition: .3s var(--ease-out);
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input:checked + .slider { background-color: #34C759; }
+        input:checked + .slider:before { transform: translateX(22px); }
+
+        @media (prefers-reduced-motion: reduce) {
+            .modal-content, .settings-trigger, .toggle-row, .btn-primary { transition: opacity 200ms ease, background 200ms ease !important; transform: none !important; }
+            .slider, .slider:before { transition: none !important; }
         }
     </style>
-    <link rel="shortcut icon" href="https://i.imgur.com/e6skOZ8.png" type="image/x-icon">
-    <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,600,700&display=swap" rel="stylesheet">
 </head>
 
 <body>
-        
-        
+    <div class="settings-trigger" onclick="openConfig()" aria-label="Configurações">
+        <svg viewBox="0 0 24 24">
+            <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+        </svg>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div class="modal-overlay" id="configModal" onclick="closeConfig(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>Qualidade de Vídeo</h3>
+                <button class="close-btn" onclick="closeConfig(event)" aria-label="Fechar">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M13 1L1 13M1 1L13 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <p style="font-size: 1.4vh; opacity: 0.8; margin-bottom: 2.5vh;">Selecione as qualidades e idiomas que você deseja ver. Itens desativados serão ocultados no Stremio.</p>
+
+            <h4 class="section-title">Qualidade de Vídeo</h4>
+            <div class="options-grid">
+                <label class="toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-title">4K (Ultra HD)</span>
+                        <span class="toggle-desc">Máxima qualidade (2160p)</span>
+                    </div>
+                    <div class="switch">
+                        <input type="checkbox" id="q-4k" checked onchange="updateInstallLink()">
+                        <span class="slider"></span>
+                    </div>
+                </label>
+                
+                <label class="toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-title">1080p (FHD)</span>
+                        <span class="toggle-desc">Full High Definition</span>
+                    </div>
+                    <div class="switch">
+                        <input type="checkbox" id="q-1080p" checked onchange="updateInstallLink()">
+                        <span class="slider"></span>
+                    </div>
+                </label>
+                
+                <label class="toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-title">720p (HD)</span>
+                        <span class="toggle-desc">High Definition</span>
+                    </div>
+                    <div class="switch">
+                        <input type="checkbox" id="q-720p" checked onchange="updateInstallLink()">
+                        <span class="slider"></span>
+                    </div>
+                </label>
+                
+                <label class="toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-title">SD (Standard)</span>
+                        <span class="toggle-desc">480p ou menor</span>
+                    </div>
+                    <div class="switch">
+                        <input type="checkbox" id="q-sd" checked onchange="updateInstallLink()">
+                        <span class="slider"></span>
+                    </div>
+                </label>
+
+                <label class="toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-title">CAM (Cinema)</span>
+                        <span class="toggle-desc">Gravação de cinema</span>
+                    </div>
+                    <div class="switch">
+                        <input type="checkbox" id="q-cam" checked onchange="updateInstallLink()">
+                        <span class="slider"></span>
+                    </div>
+                </label>
+            </div>
+
+            <h4 class="section-title">Idioma do Áudio</h4>
+            <div class="options-grid">
+                <label class="toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-title">Dublado (PT-BR)</span>
+                        <span class="toggle-desc">Áudio em Português</span>
+                    </div>
+                    <div class="switch">
+                        <input type="checkbox" id="a-dub" checked onchange="updateInstallLink()">
+                        <span class="slider"></span>
+                    </div>
+                </label>
+
+                <label class="toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-title">Legendado</span>
+                        <span class="toggle-desc">Áudio original + Legenda</span>
+                    </div>
+                    <div class="switch">
+                        <input type="checkbox" id="a-leg" checked onchange="updateInstallLink()">
+                        <span class="slider"></span>
+                    </div>
+                </label>
+            </div>
+
+            <button class="btn-primary" style="width: 100%;" onclick="saveAndClose()">Salvar Configuração</button>
+        </div>
     </div>
 
     <div id="addon">
         <div class="logo">
-            <img src="https://i.imgur.com/e6skOZ8.png">
+            <img src="/logo.png" alt="Logo FenixFlix">
         </div>
         <h1 class="name">{{ manifest.name }}</h1>
         <h2 class="version">{{ version }}</h2>
-        <h2 class="description">{{ manifest.description }}</h2>
+        <h2 class="description" style="margin-top: 1vh;">{{ manifest.description }}</h2>
 
         <div class="separator"></div>
 
@@ -93,23 +348,58 @@
         <div class="separator"></div>
 
         <a id="installLink" class="install-link" href="#">
-            <button name="Install">INSTALAR NO STREMIO</button>
+            <button class="btn-primary" name="Install">INSTALAR NO STREMIO</button>
         </a>
     </div>
 
     <script>
-        function toggleConfig() {
-            var configContainer = document.getElementById('config-container');
-            if (configContainer.style.display === 'none' || configContainer.style.display === '') {
-                configContainer.style.display = 'flex';
-            } else {
-                configContainer.style.display = 'none';
-            }
+        function openConfig() {
+            document.getElementById('configModal').classList.add('active');
         }
 
-        // Script de Instalação Automática
-        const installUrl = 'stremio://' + window.location.host + '/manifest.json';
-        document.getElementById('installLink').href = installUrl;
+        function closeConfig(e) {
+            if(e) e.stopPropagation();
+            document.getElementById('configModal').classList.remove('active');
+        }
+        
+        function saveAndClose() {
+            updateInstallLink();
+            closeConfig();
+        }
+
+        function updateInstallLink() {
+            const qualities = [];
+            if(document.getElementById('q-4k').checked) qualities.push('4k');
+            if(document.getElementById('q-1080p').checked) qualities.push('1080p');
+            if(document.getElementById('q-720p').checked) qualities.push('720p');
+            if(document.getElementById('q-sd').checked) qualities.push('sd');
+            if(document.getElementById('q-cam').checked) qualities.push('cam');
+            
+            const audios = [];
+            if(document.getElementById('a-dub').checked) audios.push('dublado');
+            if(document.getElementById('a-leg').checked) audios.push('legendado');
+            
+            // Proteções básicas para não deixar tudo desmarcado
+            if(qualities.length === 0) {
+                qualities.push('sd');
+                document.getElementById('q-sd').checked = true;
+            }
+            if(audios.length === 0) {
+                audios.push('dublado');
+                document.getElementById('a-dub').checked = true;
+            }
+
+            const configStr = `qualities=${qualities.join(',')}|audio=${audios.join(',')}`;
+            
+            const host = window.location.host;
+            const protocol = window.location.protocol === 'https:' ? 'stremio://' : 'stremio://'; 
+            
+            const installUrl = `${protocol}${host}/${configStr}/manifest.json`;
+            document.getElementById('installLink').href = installUrl;
+        }
+
+        // Script de Instalação Automática inicial
+        updateInstallLink();
     </script>
 </body>
 </html>
