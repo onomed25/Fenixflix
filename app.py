@@ -639,6 +639,10 @@ async def get_logo():
         return FileResponse(logo_path, media_type="image/png")
     return JSONResponse(content={"error": "Not found"}, status_code=404)
 
+@app.get("/configure")
+async def configure_endpoint(request: Request):
+    return FileResponse("index.html")
+
 @app.get("/manifest.json")
 @app.get("/{config}/manifest.json")
 async def manifest_endpoint(request: Request, config: str = None):
@@ -659,7 +663,18 @@ async def manifest_endpoint(request: Request, config: str = None):
             {"type": "series", "id": "populares_fenix",   "name": "Populares (Fenix)"},
             {"type": "series", "id": "recentes_servidor", "name": "Recém Adicionado (Fenix)"}
         ],
-        "idPrefixes": ["tt", "tmdb"]
+        "idPrefixes": ["tt", "tmdb"],
+        "behaviorHints": {
+            "configurable": True,
+            "configurationRequired": False
+        },
+        "config": [
+            {"key": "providers.serve", "type": "checkbox", "title": "Servidor Fenix", "default": "checked"},
+            {"key": "providers.on", "type": "checkbox", "title": "Mediafire", "default": "checked"},
+            {"key": "providers.custom_api", "type": "checkbox", "title": "AioMeta", "default": "checked"},
+            {"key": "providers.redeflix", "type": "checkbox", "title": "RedeFlix", "default": "checked"},
+            {"key": "providers.homura", "type": "checkbox", "title": "Homura (Animes)", "default": "checked"}
+        ]
     })
 
 @app.get("/catalog/{type}/{id}.json")
@@ -1062,21 +1077,8 @@ async def stream(type: str, id: str, request: Request, background_tasks: Backgro
                 run_scraper_sem(stream_concurrency_sem, resolve_redeflix(url=redeflix_url, client=_http_client))
             )
 
-        # Shop Integration
-        shop_flag = scraper_flags.get("shop")
-        if shop_flag == "N":
-            novos_flags["shop"] = "N"
-        else:
-            outras_tarefas["shop"] = asyncio.create_task(
-                run_scraper_sem(stream_concurrency_sem, resolve_shop(
-                    imdb_id=imdb_id,
-                    tmdb_id=tmdb_id,
-                    content_type=type,
-                    season=season,
-                    episode=episode,
-                    client=_http_client
-                ))
-            )
+        # Shop Integration (Desativado temporariamente para testes de RAM)
+        novos_flags["shop"] = "N"
 
     if is_anime:
         homura_flag = scraper_flags.get("homura")
